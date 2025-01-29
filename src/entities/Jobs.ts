@@ -1,16 +1,23 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from "typeorm";
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from "typeorm";
+import { JobShortlistedProfiles } from "./JobShortlistedProfiles";
+// import { JobSkills } from "./JobSkills";
+import { Manager } from "./Manager";
+import { ResumeScores } from "./ResumeScores";
+import { Schedule } from "./Schedule";
 
 @Index("jobs_pkey", ["jobId"], { unique: true })
 @Entity("jobs", { schema: "public" })
-export class JobsEntity {
-  @Column("date", { name: "created_on" })
-  createdOn: string;
-
-  @Column("boolean", { name: "is_deleted" })
-  isDeleted: boolean;
-
-  @PrimaryGeneratedColumn({ type: "integer", name: "job_id" })
-  jobId: number;
+export class Jobs {
+  @PrimaryGeneratedColumn({ type: "bigint", name: "job_id" })
+  jobId: string;
 
   @Column("text", { name: "job_title" })
   jobTitle: string;
@@ -21,21 +28,34 @@ export class JobsEntity {
   @Column("text", { name: "job_desc", nullable: true })
   jobDesc: string | null;
 
-  @Column("text", { name: "skill1" })
-  skill1: string;
+  @Column("timestamp without time zone", {
+    name: "created_on",
+    default: () => "CURRENT_TIMESTAMP",
+  })
+  createdOn: Date;
 
-  @Column("text", { name: "skill2", nullable: true })
-  skill2: string | null;
+  @Column("timestamp without time zone", { name: "updated_at", nullable: true })
+  updatedAt: Date | null;
 
-  @Column("text", { name: "skill3", nullable: true })
-  skill3: string | null;
+  @Column("boolean", { name: "is_deleted", default: () => "false" })
+  isDeleted: boolean;
 
-  @Column("text", { name: "skill4", nullable: true })
-  skill4: string | null;
+  @OneToMany(
+    () => JobShortlistedProfiles,
+    (jobShortlistedProfiles) => jobShortlistedProfiles.job
+  )
+  jobShortlistedProfiles: JobShortlistedProfiles[];
 
-  @Column("text", { name: "skill5", nullable: true })
-  skill5: string | null;
+  // @OneToMany(() => JobSkills, (jobSkills) => jobSkills.job)
+  // jobSkills: JobSkills[];
 
-  @Column("text", { name: "manager_id" })
-  managerId: string;
+  @ManyToOne(() => Manager, (manager) => manager.jobs)
+  @JoinColumn([{ name: "manager_id", referencedColumnName: "managerId" }])
+  manager: Manager;
+
+  @OneToMany(() => ResumeScores, (resumeScores) => resumeScores.job)
+  resumeScores: ResumeScores[];
+
+  @OneToMany(() => Schedule, (schedule) => schedule.job)
+  schedules: Schedule[];
 }

@@ -1,3 +1,6 @@
+import { SkillModule } from './../skill/skill.module';
+import { CandidateModule } from './../candidate/candidate.module';
+import { AnswersRepository } from './../../repositories/AnswersRepository';
 import { QuestionsRepository } from './../../repositories/QuestionsRepository';
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmExModule } from '../../db/typeorm-ex.module';
@@ -9,9 +12,12 @@ import { QuestionController } from './question.controller';
 
 @Module({
   imports: [
-    TypeOrmExModule.forCustomRepository([QuestionsRepository]),
+    TypeOrmExModule.forCustomRepository([QuestionsRepository, AnswersRepository]),
     forwardRef(() => SharedModule),
-    forwardRef(() => AuthModule)
+    forwardRef(() => AuthModule),
+    forwardRef(() => CandidateModule),
+    forwardRef(() => SkillModule)
+
   ],
   providers: [QuestionService, JwtStrategy],
   controllers: [QuestionController],

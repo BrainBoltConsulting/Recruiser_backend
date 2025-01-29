@@ -8,7 +8,7 @@ import {LoginDto} from './dtos/login.dto';
 import {RegistrationDto} from './dtos/registration.dto';
 import {VerifyCodeDto} from './dtos/verify-code.dto';
 import { MessageDto } from '../common/modules/shared/message.dto';
-import { Auth } from '../../decorators/http.decorator';
+import { Auth, AuthWithoutRequiredUser } from '../../decorators/http.decorator';
 import { AuthUser } from '../../decorators/auth.decorator';
 import { UserDto } from '../common/modules/user/user.dto';
 
@@ -18,7 +18,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Get('/me')
-  @Auth([Role.CANDIDATE])
+  // tmp solution
+  @AuthWithoutRequiredUser()
   @HttpCode(HttpStatus.OK)
   async getMe(
     @AuthUser() user: UserDto

@@ -5,7 +5,7 @@ import { AbstractDto } from '../../dtos/abstract.dto';
 export class UserDto extends AbstractDto {
 
   @ApiProperty()
-  name: string;
+  firstName: string;
 
   @ApiProperty()
   email: string;
@@ -15,7 +15,7 @@ export class UserDto extends AbstractDto {
 
   constructor(user: any, options: {isForAdmin?: boolean, isAccess?: boolean, isExtended?: boolean}) {
     super(user);
-    this.name = user.name;
+    this.firstName = user.firstName;
     this.email = user.email;
     this.techPrimary = user.techPrimary;
   }

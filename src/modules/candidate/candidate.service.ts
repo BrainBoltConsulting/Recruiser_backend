@@ -1,5 +1,9 @@
-import { UsersRepository } from './../../repositories/UsersRepository';
-import { UserDto } from './../common/modules/user/user.dto';
+import { LoginRepository } from './../../repositories/LoginRepository';
+import { SkillService } from './../skill/skill.service';
+import { RegistrationDto } from './../auth/dtos/registration.dto';
+import { Candidate } from '../../entities/Candidate';
+import { CandidateRepository } from '../../repositories/CandidateRepository';
+import { UserDto } from '../common/modules/user/user.dto';
 import { MailService } from '../../shared/services/mail.service';
 import { VerifyUserIdentityDto } from './dtoes/verify-user-identity.dto';
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
@@ -8,7 +12,6 @@ import { Role } from '../../constants/role.enum';
 import { UtilsProvider } from '../../providers/utils.provider';
 import { S3Service } from '../../shared/services/aws-s3.service';
 import { UserNotFoundException } from './exceptions/user-not-found.exception';
-// import { UserRepository } from './repositories/user.repository';
 import { UserTokenService } from '../auth/user-token.service';
 import { TokenTypeEnum } from '../../constants/token-type.enum';
 import { PageOptionsDto } from '../common/dtos/page-options.dto';
@@ -21,12 +24,13 @@ import { UpdatePasswordDto } from './dtoes/update-password.dto';
 import { UserUnauthenticatedException } from '../auth/exceptions/user-unauthenticated.exception';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { GetUsersDto } from './dtoes/get-users.dto';
-import { UsersEntity } from '../../entities/Users';
 
 @Injectable()
-export class UserService {
+export class CandidateService {
   constructor(
-    public readonly userRepository: UsersRepository,
+    public readonly skillService: SkillService,
+    public readonly candidateRepository: CandidateRepository,
+    public readonly loginRepository: LoginRepository,
     public readonly s3Service: S3Service,
     public readonly mailService: MailService,
     private readonly jwtService: JwtStrategy,
@@ -35,11 +39,28 @@ export class UserService {
   ) {}
 
   @Transactional()
-  async create(data: Partial<UsersEntity>) {
+  async create(data: Partial<RegistrationDto>) {
     try {  
-      let entityToSave: UsersEntity = this.userRepository.create(data);
-      console.log(entityToSave)
-      const entity = await this.userRepository.save(entityToSave);
+      const loginEntity  = await this.loginRepository.save(this.loginRepository.create({
+        loginUsername: data.email,
+        loginPassword: data.password,
+        role: Role.CANDIDATE,
+        email: data.email
+      }));
+
+      const candidateEntityToSave = this.candidateRepository.create({
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        login: loginEntity,
+        loginId: loginEntity.loginId
+      });
+
+      const entity = await this.candidateRepository.save({
+        ...candidateEntityToSave,
+      });
+
+      await this.skillService.createSkillForCadidate(data.skillId, entity.candidateId);
 
       return entity;
     } catch (error) {
@@ -48,7 +69,7 @@ export class UserService {
     }
   }
   async getEntityByEmail(email: string, withoutException?: boolean) {
-    const entity = await this.userRepository.findByEmail(email);
+    const entity = await this.candidateRepository.findByEmail(email);
 
     if (!entity && !withoutException) {
       throw new UserNotFoundException();
@@ -57,16 +78,20 @@ export class UserService {
     return entity;
   }
 
-   async getEntityById(id: string) {
-    const entity = await this.userRepository.findByUserId(id);
-    
+   async getEntityById(id: string, withoutException?: boolean) {
+    const entity = await this.candidateRepository.findById(id);
+
+    if (!entity && !withoutException) {
+      throw new UserNotFoundException();
+    }
+
     return entity;
   }
 
 
   @Transactional()
   async sendInvitationViaEmail(email: string): Promise<void> {
-    const userByEmail = await this.userRepository.findByEmail(email);
+    const userByEmail = await this.candidateRepository.findByEmail(email);
 
     if (!userByEmail) {
       throw new UserNotFoundException()
@@ -74,7 +99,7 @@ export class UserService {
 
     const token = this.jwtService.generateToken({
       payload: {
-        id: userByEmail.userId,
+        id: userByEmail.candidateId,
         user: userByEmail,
         // user: userByEmail.toDto({isAccess: true}),
         type: TokenTypeEnum.SET_PASSWORD,
@@ -83,18 +108,19 @@ export class UserService {
 
     await this.userTokenService.upsert({
       token,
-      userId: userByEmail.userId,
+      userId: userByEmail.candidateId,
       type: TokenTypeEnum.SET_PASSWORD
     })
 
     await this.mailService.send({
       to: userByEmail.email,
       subject: "You're Invited! Join Your Meeting on Canint",
-      html: this.mailService.sendInvitationForAMeeting(userByEmail.name, userByEmail.techPrimary),
+      // tmp solution
+      html: this.mailService.sendInvitationForAMeeting(userByEmail.firstName, "userByEmail"),
     });  }
 
   async getUserById(id: string) {
-    const entity = await this.userRepository.findByUserId(id);
+    const entity = await this.candidateRepository.findByUserId(id);
     
     //return entity.toDto();
     return entity;
@@ -104,37 +130,24 @@ export class UserService {
   async updateUser(id: string, user: UserDto, updateUserDto: UpdateUserDto) {
 
     if (Object.keys(updateUserDto).length) {
-      await this.userRepository.update(id, {
-        name: user.name
+      await this.candidateRepository.update(id, {
+        firstName: user.firstName
       });
     }
 
-    return (await this.userRepository.findByUserId(id));
+    return (await this.candidateRepository.findByUserId(id));
 
-    // return (await this.userRepository.findById(id)).toDto({isAccess: true});
+    // return (await this.candidateRepository.findById(id)).toDto({isAccess: true});
   }
 
-  async getAllUsers(getUsersDto: GetUsersDto): Promise<UsersEntity[]> {
-    let userEntitiesQuery = await this.userRepository.getAllSorted();
-    console.log(userEntitiesQuery)
+  async getAllUsers(getUsersDto: GetUsersDto): Promise<Candidate[]> {
+    let userEntitiesQuery = await this.candidateRepository.getAllSorted();
+
     // const [userEntities, pageMetaDto] = await userEntitiesQuery.paginate(
     //   getUsersDto
     // );  
 
     return userEntitiesQuery
-  }
-
-  @Transactional()
-  async uploadUserFiles(id: string, user: UserDto,  files?: {formW9?: Express.Multer.File[], taxExemptionCertificate?: Express.Multer.File[], avatar?: Express.Multer.File[]}): Promise<UrlDto[]> {
-    const userEntity = await this.userRepository.findByUserId(id);
-    
-    const fileEntities: Promise<UrlDto>[] = [];
-
-    if (files?.avatar) {
-      //fileEntities.push(this.urlService.upsertFile(id, files.avatar[0], UrlTypeEnum.FOR_USER_AVATAR, userEntity, TargetTypeEnum.USER))
-    }
-
-    return Promise.all(fileEntities);
   }
 
   @Transactional()
@@ -157,10 +170,11 @@ export class UserService {
     // await this.addOrResetPassword(id, body.newPassword);
   }
 
-  async validateUserPassword(userEntity: UsersEntity, password: string) {
+  async validateUserPassword(userEntity: Candidate, password: string) {
     const isPasswordValid = await UtilsProvider.validateHash(
       password,
-      userEntity.password,
+      // tmp solution
+      "userEntity.password",
     );
     
     if (!isPasswordValid) {
@@ -172,8 +186,13 @@ export class UserService {
 
   @Transactional()
   async deleteUser(id: string): Promise<void> {
-    await this.userRepository.findByUserId(id);
-    await this.userRepository.delete(id);
+    await this.candidateRepository.findByUserId(id);
+    await this.candidateRepository.delete(id);
   }
 
+  async getCandidateWithLoginData(email: string) {
+    const candidateEntity = await this.candidateRepository.getWithLoginData(email);
+
+    return candidateEntity;
+  }
 }

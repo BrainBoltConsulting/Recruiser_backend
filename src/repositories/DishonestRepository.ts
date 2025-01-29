@@ -1,32 +1,31 @@
 
 import { Repository } from 'typeorm';
 import { CustomRepository } from '../db/typeorm-ex.decorator';
-import { InjectRepository } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
-import { DishonestEntity } from '../entities/Dishonest';
+import { Dishonest } from '../entities/Dishonest';
 
-@CustomRepository(DishonestEntity)
-export class DishonestRepository extends Repository<DishonestEntity> {
+@CustomRepository(Dishonest)
+export class DishonestRepository extends Repository<Dishonest> {
 
-  async findByCandidateId(candidateId: string): Promise<DishonestEntity | null> {
+  async findByName(name: string): Promise<Dishonest | null> {
     return this.createQueryBuilder('dishonest')
-      .where('dishonest.candidateId = :candidateId', { candidateId })
+      .where('dishonest.name = :name', { name })
       .getOne();
   }
 
-  async getAllSorted(): Promise<DishonestEntity[]> {
+  async getAllSorted(): Promise<Dishonest[]> {
     return this.createQueryBuilder('dishonest')
       .orderBy('dishonest.createdAt', 'DESC')
       .getMany();
   }
 
-  async findById(id: string): Promise<DishonestEntity> {
+  async findById(id: string): Promise<Dishonest> {
     const entity = await this.createQueryBuilder('dishonest')
       .where('dishonest.id = :id', { id })
       .getOne();
 
     if (!entity) {
-      throw new NotFoundException(`${DishonestEntity} not found with id: ${id}`);
+      throw new NotFoundException(`${Dishonest} not found with id: ${id}`);
     }
 
     return entity;

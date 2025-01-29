@@ -1,10 +1,11 @@
-import { UsersEntity } from './../../entities/Users';
-import { UserAlreadyExistsException } from '../user/exceptions/user-already-exists.exception';
+import { LoginRepository } from './../../repositories/LoginRepository';
+import { Candidate } from './../../entities/Candidate';
+import { UserAlreadyExistsException } from '../candidate/exceptions/user-already-exists.exception';
 import { Injectable} from '@nestjs/common';
 import {Transactional} from 'typeorm-transactional';
 import {TokenTypeEnum} from '../../constants/token-type.enum';
 import {UtilsProvider} from '../../providers/utils.provider';
-import {UserService} from '../user/user.service';
+import {CandidateService} from '../candidate/candidate.service';
 import {ForgotPasswordDto} from './dtos/forgot-password.dto';
 import type {LoginDto} from './dtos/login.dto';
 import {RegistrationDto} from './dtos/registration.dto';
@@ -27,7 +28,8 @@ import { StatusEnum } from '../../constants/status.enum';
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly UserService: UserService,
+    private readonly candidateService: CandidateService,
+    private readonly loginRepository: LoginRepository,
     private readonly jwtService: JwtStrategy,
     private readonly configService: ApiConfigService,
     private readonly userTokenService: UserTokenService,
@@ -35,18 +37,18 @@ export class AuthService {
   ) {}
 
   @Transactional()
-  async login(userObj: UsersEntity | LoginDto) {
-    const userEntity: any =
-      userObj instanceof UsersEntity
+  async login(userObj: Candidate | LoginDto) {
+    const userEntity =
+      userObj instanceof Candidate
         ? userObj
         : await this.validateUser(userObj);
-    console.log(userEntity)
+
     // return this.jwtService.generateAccessPayload(userEntity.toDto({isAccess: true}));
     return this.jwtService.generateAccessPayload(userEntity);
   }
 
   async getMe(user: UserDto) {
-    const userEntity = await this.UserService.getEntityByEmail(user.email);
+    const userEntity = await this.candidateService.getEntityByEmail(user.email);
     return this.login(userEntity);
   }
 
@@ -54,7 +56,7 @@ export class AuthService {
   async refreshToken(refreshTokenDto: TokenDto) {
     try {
       const user = this.jwtService.getPayload(refreshTokenDto.token).user;
-      const userEntity = await this.UserService.getEntityByEmail(user.email);
+      const userEntity = await this.candidateService.getEntityByEmail(user.email);
 
       // return this.jwtService.generateAccessPayload(userEntity.toDto({isAccess: true}));
       return this.jwtService.generateAccessPayload(userEntity);
@@ -65,43 +67,42 @@ export class AuthService {
 
   @Transactional()
   async registrationAndLogin(regDto: RegistrationDto, role: Role) {
-    const userEntity = await this.UserService.getEntityByEmail(regDto.email, true);
+    const userEntity = await this.candidateService.getEntityByEmail(regDto.email, true);
 
     if (userEntity) {
       throw new UserAlreadyExistsException()
     }
 
-    const regUser = await this.UserService.create({
-      ...regDto, 
-      password: UtilsProvider.generateHash(regDto.password),
+    const regUser = await this.candidateService.create({
+      ...regDto,
+      password: regDto.password,
     });
-    console.log(regUser)
-    const loginData = await this.login(regUser);
+    const loginData = await this.login({ email: regUser.email, password: regUser.login.loginPassword });
 
     return loginData;
   }
 
   async validateUser(userLoginDto: LoginDto) {
-    const userEntity = await this.UserService.getEntityByEmail(userLoginDto.email.toLowerCase());
+    const candidateEntity = await this.candidateService.getCandidateWithLoginData(userLoginDto.email.toLowerCase());
     const isPasswordValid = await UtilsProvider.validateHash(
       userLoginDto.password,
-      userEntity.password,
+      candidateEntity.login.loginPassword,
     );
     
     if (!isPasswordValid) {
       throw new UserUnauthenticatedException('password is an invalid');
     }
 
-    return userEntity;
+    return candidateEntity;
   }
 
   @Transactional()
   async forgotPassword(forgotPasswordDto: ForgotPasswordDto): Promise<void> {
-      const userEntity = await this.UserService.getEntityByEmail(forgotPasswordDto.email);
+      const userEntity = await this.candidateService.getEntityByEmail(forgotPasswordDto.email);
       const code = UtilsProvider.getRandomNum();
       
       await this.userTokenService.upsert({
-        userId: userEntity.userId,
+        userId: userEntity.candidateId,
         token: code,
         type: TokenTypeEnum.FORGOT_PASSWORD,
       });
@@ -115,7 +116,7 @@ export class AuthService {
 
   @Transactional()
   async verifyCode(verifyCodeDto: VerifyCodeDto) {
-    const user = (await this.UserService.getEntityByEmail(verifyCodeDto.userEmail));
+    const user = (await this.candidateService.getEntityByEmail(verifyCodeDto.userEmail));
 
     return this.verifyAccountOrResetPasswordActions(
       verifyCodeDto, 
@@ -124,10 +125,10 @@ export class AuthService {
     );
   }
 
-  async verifyAccountOrResetPasswordActions(verifyCodeDto: VerifyCodeDto, user: UsersEntity, tokenType: TokenTypeEnum) {
+  async verifyAccountOrResetPasswordActions(verifyCodeDto: VerifyCodeDto, user: Candidate, tokenType: TokenTypeEnum) {
     const targetToken: TokenTypeEnum = tokenType === TokenTypeEnum.VERIFY_ACCOUNT ? TokenTypeEnum.SET_PASSWORD : TokenTypeEnum.RESET_PASSWORD;
     const tokenEntity = await this.userTokenService.getByUserIdAndType(
-      user.userId,
+      user.candidateId,
       tokenType,
     );
 
@@ -137,7 +138,7 @@ export class AuthService {
 
     const token = this.jwtService.generateToken({
       payload: {
-        id: user.userId,
+        id: user.candidateId,
         user,
         type: targetToken,
       },
@@ -146,7 +147,7 @@ export class AuthService {
     await this.userTokenService.delete(tokenEntity.userId);
 
     return this.userTokenService.upsert({
-      userId: user.userId,
+      userId: user.candidateId,
       token,
       type: targetToken,
     });

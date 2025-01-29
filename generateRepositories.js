@@ -4,25 +4,25 @@ const path = require('path');
 const entitiesDir = path.join(__dirname, 'src/entities');
 const repositoriesDir = path.join(__dirname, 'src/repositories');
 
-fs.readdirSync(entitiesDir).forEach((file) => {
-  if (file.endsWith('.ts')) {
-    const filePath = path.join(entitiesDir, file);
-    const content = fs.readFileSync(filePath, 'utf-8');
+// fs.readdirSync(entitiesDir).forEach((file) => {
+//   if (file.endsWith('.ts')) {
+//     const filePath = path.join(entitiesDir, file);
+//     const content = fs.readFileSync(filePath, 'utf-8');
 
-    const oldClassName = file.replace('.ts', '');
-    const newClassName = `${oldClassName}Entity`;
+//     const oldClassName = file.replace('.ts', '');
+//     const newClassName = `${oldClassName}Entity`;
 
-    if (!content.includes(`class ${oldClassName}Entity`)) {
-      const updatedContent = content.replace(
-        new RegExp(`class ${oldClassName}`, 'g'),
-        `class ${newClassName}`
-      );
+//     if (!content.includes(`class ${oldClassName}Entity`)) {
+//       const updatedContent = content.replace(
+//         new RegExp(`class ${oldClassName}`, 'g'),
+//         `class ${newClassName}`
+//       );
   
-      fs.writeFileSync(filePath, updatedContent);
-      console.log(`Renamed ${file} class to ${newClassName}`);
-    } 
-  }
-});
+//       fs.writeFileSync(filePath, updatedContent);
+//       console.log(`Renamed ${file} class to ${newClassName}`);
+//     } 
+//   }
+// });
 
 
 if (!fs.existsSync(repositoriesDir)) {
@@ -70,7 +70,6 @@ function getPrimaryColumnName(entityFilePath) {
 const template = (entityFileName, entityName, primaryColumn) => `
 import { Repository } from 'typeorm';
 import { CustomRepository } from '../db/typeorm-ex.decorator';
-import { InjectRepository } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { ${entityName} } from '../entities/${entityFileName}';
 
@@ -116,7 +115,7 @@ fs.readdirSync(entitiesDir)
     try {
       const primaryColumn = getPrimaryColumnName(entityFilePath);
       const repositoryFile = path.join(repositoriesDir, `${entityName}Repository.ts`);
-      fs.writeFileSync(repositoryFile, template(entityName, `${entityName}Entity`, primaryColumn));
+      fs.writeFileSync(repositoryFile, template(entityName, `${entityName}`, primaryColumn));
       console.log(`Generated repository for ${entityName} with primary column ${primaryColumn}`);
     } catch (error) {
       console.error(`Error generating repository for ${entityName}:`, error.message);

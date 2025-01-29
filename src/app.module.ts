@@ -1,3 +1,4 @@
+import { SkillModule } from './modules/skill/skill.module';
 import './boilerplate.polyfill';
 import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { Module } from '@nestjs/common';
@@ -9,20 +10,23 @@ import { AwsSdkModule } from 'nest-aws-sdk';
 import { DataSource } from 'typeorm';
 import { addTransactionalDataSource } from 'typeorm-transactional';
 import { contextMiddleware } from './contex.middleware';
-import { UserModule } from './modules/user/user.module';
+import { CandidateModule } from './modules/candidate/candidate.module';
 import { ApiConfigService } from './shared/services/api-config.service';
 import { SharedModule } from './shared/shared.module';
 import { AuthModule } from "./modules/auth/auth.module";
 import { AgoraModule } from './modules/agora/agora.module';
 import { QuestionModule } from './modules/question/question.module';
+import { MeetingModule } from './modules/meeting/meeting.module';
 
 @Module({
   imports: [
     SharedModule,
     AuthModule,
     AgoraModule,
-    UserModule,
+    CandidateModule,
     QuestionModule,
+    MeetingModule,
+    SkillModule,
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

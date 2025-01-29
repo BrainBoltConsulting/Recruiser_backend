@@ -69,10 +69,10 @@ export class ApiConfigService {
       password: this.getString('DB_PASSWORD'),
       database: this.getString('DB_DATABASE'),
       logging: true,
-      synchronize: false,
-      ssl: {
-        rejectUnauthorized: false
-      }
+      synchronize: true,
+      // ssl: {
+      //   rejectUnauthorized: false
+      // }
     };
 
     return data;

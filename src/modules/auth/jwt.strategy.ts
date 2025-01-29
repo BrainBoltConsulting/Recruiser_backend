@@ -1,4 +1,4 @@
-import { UsersEntity } from './../../entities/Users';
+import { Candidate } from './../../entities/Candidate';
 import { Injectable } from '@nestjs/common';
 import {sign, verify} from 'jsonwebtoken';
 
@@ -22,13 +22,13 @@ export class JwtStrategy {
       : sign(options.payload, this.configService.jwtConfig.secret);
   }
 
-  async generateAccessPayload(user: UsersEntity): Promise<AccessPayloadDto> {
+  async generateAccessPayload(user: Candidate): Promise<AccessPayloadDto> {
     const accessToken = this.generateToken({
-      payload: { id: user.userId, user, type: TokenTypeEnum.AUTH },
+      payload: { id: user.candidateId, user, type: TokenTypeEnum.AUTH },
       expiresIn: this.configService.jwtConfig.accessTokenExpiry,
     });
     const refreshToken = this.generateToken({
-      payload: { id: user.userId, user, type: TokenTypeEnum.REFRESH },
+      payload: { id: user.candidateId, user, type: TokenTypeEnum.REFRESH },
       expiresIn: this.configService.jwtConfig.refreshTokenExpiry,
     });
 

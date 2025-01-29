@@ -1,4 +1,4 @@
-import { UsersEntity } from './../entities/Users';
+import { Candidate } from './../entities/Candidate';
 import requestContext from 'request-context';
 
 
@@ -19,11 +19,11 @@ export class ContextProvider {
     return `${ContextProvider.nameSpace}.${key}`;
   }
 
-  static setAuthUser(user: UsersEntity): void {
+  static setAuthUser(user: Candidate): void {
     ContextProvider.set('request.user', user);
   }
 
-  static getAuthUser(): UsersEntity {
+  static getAuthUser(): Candidate {
     return ContextProvider.get(ContextProvider.authUserKey);
   }
 }

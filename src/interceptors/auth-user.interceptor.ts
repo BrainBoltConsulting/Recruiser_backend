@@ -1,4 +1,4 @@
-import { UsersEntity } from './../entities/Users';
+import { Candidate } from './../entities/Candidate';
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from "@nestjs/common";
 import { ContextProvider } from "../providers/context.provider";
 import { StatusEnum } from '../constants/status.enum';
@@ -25,7 +25,7 @@ export class AuthUserInterceptor implements NestInterceptor {
             throw new UserIsNotActiveException()
         }
 
-        ContextProvider.setAuthUser(<UsersEntity>request.user);
+        ContextProvider.setAuthUser(<Candidate>request.user);
         
         const userSession = this.reflector.get<string[]>(
             'userSession', 

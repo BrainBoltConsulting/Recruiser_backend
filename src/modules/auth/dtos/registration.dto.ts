@@ -1,17 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsNumber,
   IsString,
-  MaxLength,
-  MinLength,
 } from 'class-validator';
 import { LoginDto } from './login.dto';
 
 export class RegistrationDto extends LoginDto {
   @ApiProperty()
   @IsString()
-  name: string;
+  firstName: string;
 
   @ApiProperty()
   @IsString()
-  techPrimary: string;
+  lastName: string;
+
+  @ApiProperty()
+  @IsNumber()
+  skillId: number;
 }

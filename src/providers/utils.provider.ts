@@ -3,6 +3,7 @@ import { compare, hashSync } from 'bcryptjs';
 import { isArray } from 'class-validator';
 import { MessageDto } from '../modules/common/modules/shared/message.dto';
 import { BadRequestException } from '@nestjs/common';
+import crypto from 'crypto';
 
 export class UtilsProvider {
   /**
@@ -59,11 +60,13 @@ export class UtilsProvider {
   }
 
   static validateHash(password: string, hash: string): Promise<boolean> {
-    if (!password || !hash) {
-      return Promise.resolve(false);
-    }
+    // tmp solution
+    // if (!password || !hash) {
+    //   return Promise.resolve(false);
+    // }
 
-    return compare(password, hash);
+    // return compare(password, hash);
+    return Promise.resolve(password === hash)
   }
 
   static findAndReplaceNotApplied(target: string) {
@@ -234,6 +237,12 @@ export class UtilsProvider {
     } else {
         throw new BadRequestException('Invalid data type');
     }
+  }
+
+  static generateUniqueIdOfMeeting() {
+    const uniqueId = crypto.randomBytes(4).toString("hex"); // 8-character random string
+
+    return uniqueId;
   }
 
 }

@@ -1,30 +1,46 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne } from "typeorm";
-import { UsersEntity } from "./Users";
+import {
+  Column,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from "typeorm";
+import { Interview } from "./Interview";
+import { Questions } from "./Questions";
 
-@Index("pk", ["candidateId", "questionId"], { unique: true })
+@Index("dishonest_pkey", ["dishonestId"], { unique: true })
 @Entity("dishonest", { schema: "public" })
-export class DishonestEntity {
-  @Column("date", { name: "created_on" })
-  createdOn: string;
-
-  @Column("boolean", { name: "is_deleted" })
-  isDeleted: boolean;
-
-  @Column("text", { primary: true, name: "candidate_id" })
-  candidateId: string;
-
-  @Column("text", { primary: true, name: "question_id" })
-  questionId: string;
+export class Dishonest {
+  @PrimaryGeneratedColumn({ type: "bigint", name: "dishonest_id" })
+  dishonestId: string;
 
   @Column("numeric", {
-    name: "dish_score",
+    name: "dishonest_score",
     nullable: true,
     precision: 3,
     scale: 0,
   })
-  dishScore: string | null;
+  dishonestScore: string | null;
 
-  @ManyToOne(() => UsersEntity, (users) => users.dishonests)
-  @JoinColumn([{ name: "candidate_id", referencedColumnName: "userId" }])
-  candidate: UsersEntity;
+  @Column("boolean", { name: "is_deleted", default: () => "false" })
+  isDeleted: boolean;
+
+  @Column("timestamp without time zone", {
+    name: "created_at",
+    nullable: true,
+    default: () => "CURRENT_TIMESTAMP",
+  })
+  createdAt: Date | null;
+
+  @Column("timestamp without time zone", { name: "updated_at", nullable: true })
+  updatedAt: Date | null;
+
+  @ManyToOne(() => Interview, (interview) => interview.dishonests)
+  @JoinColumn([{ name: "interview_id", referencedColumnName: "interviewId" }])
+  interview: Interview;
+
+  @ManyToOne(() => Questions, (questions) => questions.dishonests)
+  @JoinColumn([{ name: "question_id", referencedColumnName: "questionId" }])
+  question: Questions;
 }

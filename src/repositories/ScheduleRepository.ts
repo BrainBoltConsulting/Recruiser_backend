@@ -1,32 +1,31 @@
 
 import { Repository } from 'typeorm';
 import { CustomRepository } from '../db/typeorm-ex.decorator';
-import { InjectRepository } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
-import { ScheduleEntity } from '../entities/Schedule';
+import { Schedule } from '../entities/Schedule';
 
-@CustomRepository(ScheduleEntity)
-export class ScheduleRepository extends Repository<ScheduleEntity> {
+@CustomRepository(Schedule)
+export class ScheduleRepository extends Repository<Schedule> {
 
-  async findByCandidateId(candidateId: string): Promise<ScheduleEntity | null> {
+  async findByName(name: string): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
-      .where('schedule.candidateId = :candidateId', { candidateId })
+      .where('schedule.name = :name', { name })
       .getOne();
   }
 
-  async getAllSorted(): Promise<ScheduleEntity[]> {
+  async getAllSorted(): Promise<Schedule[]> {
     return this.createQueryBuilder('schedule')
       .orderBy('schedule.createdAt', 'DESC')
       .getMany();
   }
 
-  async findById(id: string): Promise<ScheduleEntity> {
+  async findById(id: string): Promise<Schedule> {
     const entity = await this.createQueryBuilder('schedule')
       .where('schedule.id = :id', { id })
       .getOne();
 
     if (!entity) {
-      throw new NotFoundException(`${ScheduleEntity} not found with id: ${id}`);
+      throw new NotFoundException(`${Schedule} not found with id: ${id}`);
     }
 
     return entity;

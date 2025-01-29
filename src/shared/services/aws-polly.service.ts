@@ -19,15 +19,17 @@ export class PollyService {
     const params: AWS.Polly.SynthesizeSpeechInput = {
       Text: text,
       OutputFormat: 'mp3',
-      VoiceId: 'Joanna',
+      VoiceId: 'Brian',
     };
 
     const result = await this.polly.synthesizeSpeech(params).promise();
-
+    console.log(result)
     if (result.AudioStream) {
       return result.AudioStream as Buffer;
     } else {
       throw new Error('Failed to generate speech');
     }
   }
+
+  
 }

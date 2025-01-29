@@ -1,4 +1,4 @@
-import { UsersEntity } from './../../../../entities/Users';
+import { Candidate } from './../../../../entities/Candidate';
 import { ApiProperty } from '@nestjs/swagger';
 
 import { UserDto } from '../user/user.dto';
@@ -11,5 +11,5 @@ export class AccessPayloadDto {
   refreshToken: string;
 
   @ApiProperty()
-  user: UsersEntity;
+  user: Candidate;
 }

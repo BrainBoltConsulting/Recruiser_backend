@@ -1,4 +1,4 @@
-import { UsersRepository } from './../repositories/UsersRepository';
+import { CandidateRepository } from './../repositories/CandidateRepository';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { UserUnauthenticatedException } from '../modules/auth/exceptions/user-unauthenticated.exception';
@@ -8,7 +8,7 @@ import {JwtStrategy} from "../modules/auth/jwt.strategy";
 export class AuthWithoutRequiredUserGuard implements CanActivate {
   constructor(
     private readonly jwtService: JwtStrategy,
-    private readonly userRepository: UsersRepository
+    private readonly candidateRepository: CandidateRepository
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -24,7 +24,7 @@ export class AuthWithoutRequiredUserGuard implements CanActivate {
 
     try {
       const user = this.jwtService.getPayload(token).user;
-      const userEntity = await this.userRepository.findByEmail(user.email);
+      const userEntity = await this.candidateRepository.findByEmail(user.email);
 
       if (!userEntity) {
         throw new UserUnauthenticatedException();
