@@ -39,6 +39,9 @@ export class Schedule {
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
+  @Column({ name: 'candidate_id', type: 'bigint' })
+  candidateId: bigint;
+
   @ManyToOne(() => Candidate, (candidate) => candidate.schedules)
   @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
   candidate: Candidate;

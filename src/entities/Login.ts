@@ -14,7 +14,7 @@ import { Manager } from "./Manager";
 @Entity("login", { schema: "public" })
 export class Login {
   @PrimaryGeneratedColumn({ type: "bigint", name: "login_id" })
-  loginId: string;
+  loginId: number;
 
   @Column("text", { name: "login_username", unique: true })
   loginUsername: string;

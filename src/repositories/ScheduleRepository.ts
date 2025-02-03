@@ -30,4 +30,10 @@ export class ScheduleRepository extends Repository<Schedule> {
 
     return entity;
   }
-}
+
+  async findByCandidateId(candidateId: number): Promise<Schedule[] | null> {
+    return this.createQueryBuilder('schedule')
+      .where('schedule.candidateId = :candidateId', { candidateId })
+      .getMany();
+  }
+} 

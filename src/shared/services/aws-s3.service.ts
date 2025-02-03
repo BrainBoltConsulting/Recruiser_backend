@@ -34,17 +34,17 @@ export class S3Service {
       .promise();
   }
 
-  async uploadFile(file: Express.Multer.File, root?: any): Promise<ManagedUpload.SendData> {
-    let endingPart = `/${uuid()}-${file.originalname}`
-    let key = root ? `${root.endsWith('Y') ? root.toLowerCase().replace('y', 'ies') : `${root.toLowerCase()}s`}` : 'other';
+  async uploadFile(file: Express.Multer.File, root?: any, fileName?: string): Promise<ManagedUpload.SendData> {
+    const fileNameEndingPart = fileName ? `/${fileName}` : `/${uuid()}-${file.originalname}`;
+    let endingPart = root + fileNameEndingPart;
 
     return this.s3
       .upload({
         Bucket: this.bucketName,
-        Key: key + endingPart,
+        Key: endingPart,
         Body: file.buffer,
         ContentType: file.mimetype,
-        ACL: 'public-read'
+        // ACL: 'public-read'
       })
       .promise();
   }

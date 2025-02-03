@@ -9,7 +9,7 @@ import {
 } from "typeorm";
 import { Login } from "./Login";
 import { CandidateSkills } from "./CandidateSkills";
-// import { CandidateVerification } from "./CandidateVerification";
+import { CandidateVerification } from "./CandidateVerification";
 import { Interview } from "./Interview";
 import { JobShortlistedProfiles } from "./JobShortlistedProfiles";
 import { ResumeScores } from "./ResumeScores";
@@ -70,8 +70,8 @@ export class Candidate {
   @Column("text", { name: "last_name", nullable: true })
   lastName: string | null;
 
-  @Column()
-  loginId: string;
+  @Column({ type: "bigint", name: 'login_id' })
+  loginId: number;
 
   @ManyToOne(() => Login, (login) => login.candidates)
   @JoinColumn([{ name: "login_id", referencedColumnName: "loginId" }])
@@ -83,11 +83,11 @@ export class Candidate {
   )
   candidateSkills: CandidateSkills[];
 
-  // @OneToMany(
-  //   () => CandidateVerification,
-  //   (candidateVerification) => candidateVerification.candidate
-  // )
-  // candidateVerifications: CandidateVerification[];
+  @OneToMany(
+    () => CandidateVerification,
+    (candidateVerification) => candidateVerification.candidate
+  )
+  candidateVerifications: CandidateVerification[];
 
   @OneToMany(() => Interview, (interview) => interview.candidate)
   interviews: Interview[];

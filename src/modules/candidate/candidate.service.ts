@@ -1,3 +1,4 @@
+import { MeetingService } from './../meeting/meeting.service';
 import { LoginRepository } from './../../repositories/LoginRepository';
 import { SkillService } from './../skill/skill.service';
 import { RegistrationDto } from './../auth/dtos/registration.dto';
@@ -5,7 +6,6 @@ import { Candidate } from '../../entities/Candidate';
 import { CandidateRepository } from '../../repositories/CandidateRepository';
 import { UserDto } from '../common/modules/user/user.dto';
 import { MailService } from '../../shared/services/mail.service';
-import { VerifyUserIdentityDto } from './dtoes/verify-user-identity.dto';
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Transactional } from 'typeorm-transactional';
 import { Role } from '../../constants/role.enum';
@@ -14,12 +14,8 @@ import { S3Service } from '../../shared/services/aws-s3.service';
 import { UserNotFoundException } from './exceptions/user-not-found.exception';
 import { UserTokenService } from '../auth/user-token.service';
 import { TokenTypeEnum } from '../../constants/token-type.enum';
-import { PageOptionsDto } from '../common/dtos/page-options.dto';
-import { PageDto } from '../common/dtos/page.dto';
 import { UrlService } from '../../shared/services/url.service';
-import { UrlDto } from '../common/modules/shared/url.dto';
 import { UpdateUserDto } from './dtoes/update-user.dto';
-import { UserAlreadyExistsException } from './exceptions/user-already-exists.exception';
 import { UpdatePasswordDto } from './dtoes/update-password.dto';
 import { UserUnauthenticatedException } from '../auth/exceptions/user-unauthenticated.exception';
 import { JwtStrategy } from '../auth/jwt.strategy';
@@ -31,6 +27,7 @@ export class CandidateService {
     public readonly skillService: SkillService,
     public readonly candidateRepository: CandidateRepository,
     public readonly loginRepository: LoginRepository,
+    public readonly meetingService: MeetingService,
     public readonly s3Service: S3Service,
     public readonly mailService: MailService,
     private readonly jwtService: JwtStrategy,
@@ -119,7 +116,7 @@ export class CandidateService {
       html: this.mailService.sendInvitationForAMeeting(userByEmail.firstName, "userByEmail"),
     });  }
 
-  async getUserById(id: string) {
+  async getUserById(id: number) {
     const entity = await this.candidateRepository.findByUserId(id);
     
     //return entity.toDto();
@@ -127,7 +124,7 @@ export class CandidateService {
   }
  
   @Transactional()
-  async updateUser(id: string, user: UserDto, updateUserDto: UpdateUserDto) {
+  async updateUser(id: number, user: UserDto, updateUserDto: UpdateUserDto) {
 
     if (Object.keys(updateUserDto).length) {
       await this.candidateRepository.update(id, {
@@ -184,8 +181,14 @@ export class CandidateService {
     return userEntity;
   } 
 
+  async getCandidatesInterviews(candidateId: number) {
+    await this.candidateRepository.findByUserId(candidateId);
+
+    return this.meetingService.getInterviewsOfCandidate(candidateId);
+  }
+
   @Transactional()
-  async deleteUser(id: string): Promise<void> {
+  async deleteUser(id: number): Promise<void> {
     await this.candidateRepository.findByUserId(id);
     await this.candidateRepository.delete(id);
   }

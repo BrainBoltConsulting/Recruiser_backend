@@ -34,6 +34,12 @@ export class ResumeScores {
   @Column("boolean", { name: "is_deleted", default: () => "false" })
   isDeleted: boolean;
 
+  @Column({ name: 'candidate_id', type: 'bigint'})
+  candidateId: number;
+
+  @Column({ name: 'criteria_id', type: 'bigint'})
+  criteriaId: number;
+
   @ManyToOne(() => Candidate, (candidate) => candidate.resumeScores)
   @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
   candidate: Candidate;

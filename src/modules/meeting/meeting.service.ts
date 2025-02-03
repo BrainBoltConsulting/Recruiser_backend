@@ -1,19 +1,19 @@
+import { S3Service } from './../../shared/services/aws-s3.service';
 import { ScheduleRepository } from './../../repositories/ScheduleRepository';
 import { UtilsProvider } from './../../providers/utils.provider';
-import { CandidateService } from './../candidate/candidate.service';
 import { CandidateRepository } from './../../repositories/CandidateRepository';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { UserDto } from './../common/modules/user/user.dto';
 import { PollyService } from '../../shared/services/aws-polly.service';
 import { Injectable } from '@nestjs/common';
-import { Transactional } from 'typeorm-transactional';
 
 @Injectable()
 export class MeetingService {
   constructor(
     private readonly pollyService: PollyService,
-    private readonly candidateService: CandidateService,
-    private scheduleRepository: ScheduleRepository
+    private readonly s3Service: S3Service,
+    private readonly candidateRepository: CandidateRepository,
+    private readonly scheduleRepository: ScheduleRepository
   ) {}
 
 
@@ -22,8 +22,14 @@ export class MeetingService {
     return this.pollyService.generateSpeechStream(text);
   }
 
+  async getInterviewsOfCandidate(candidateId: number) {
+    const interviewsOfCandidate = await this.scheduleRepository.findByCandidateId(candidateId);
+
+    return interviewsOfCandidate;
+  }
+
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
-    const candidateEntity = await this.candidateService.getEntityById(scheduleInterviewDto.candidateId);
+    const candidateEntity = await this.candidateRepository.findById(scheduleInterviewDto.candidateId);
     
     const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting()
     const fullPath = `http://localhost:3001/meeting/${uniqueIdOfMeeting}`
@@ -36,4 +42,18 @@ export class MeetingService {
     return scheduleEntity;
   }
 
+  async finishInterview(file: Express.Multer.File) {
+    const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles');
+    const link = response.Location;
+
+    return link;
+  }
+
+  async saveRecordingForQuestionByMeeting(file: Express.Multer.File, interviewId: string, questionId: string) {
+    const fileName = `MId-${interviewId}-QId-${questionId}-${Date.now()}`
+    const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
+    const link = response.Location;
+
+    return link;
+  }
 }

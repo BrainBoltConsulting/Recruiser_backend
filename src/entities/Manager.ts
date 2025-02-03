@@ -7,7 +7,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from "typeorm";
-// import { CandidateVerification } from "./CandidateVerification";
+import { CandidateVerification } from "./CandidateVerification";
 import { Interview } from "./Interview";
 import { JobShortlistedProfiles } from "./JobShortlistedProfiles";
 import { Jobs } from "./Jobs";
@@ -51,11 +51,11 @@ export class Manager {
   @Column("text", { name: "last_name", nullable: true })
   lastName: string | null;
 
-  // @OneToMany(
-  //   () => CandidateVerification,
-  //   (candidateVerification) => candidateVerification.manager
-  // )
-  // candidateVerifications: CandidateVerification[];
+  @OneToMany(
+    () => CandidateVerification,
+    (candidateVerification) => candidateVerification.manager
+  )
+  candidateVerifications: CandidateVerification[];
 
   @OneToMany(() => Interview, (interview) => interview.manager)
   interviews: Interview[];

@@ -8,7 +8,7 @@ import {
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { JobShortlistedProfiles } from "./JobShortlistedProfiles";
-// import { JobSkills } from "./JobSkills";
+import { JobSkills } from "./JobSkills";
 import { Manager } from "./Manager";
 import { ResumeScores } from "./ResumeScores";
 import { Schedule } from "./Schedule";
@@ -46,8 +46,8 @@ export class Jobs {
   )
   jobShortlistedProfiles: JobShortlistedProfiles[];
 
-  // @OneToMany(() => JobSkills, (jobSkills) => jobSkills.job)
-  // jobSkills: JobSkills[];
+  @OneToMany(() => JobSkills, (jobSkills) => jobSkills.job)
+  jobSkills: JobSkills[];
 
   @ManyToOne(() => Manager, (manager) => manager.jobs)
   @JoinColumn([{ name: "manager_id", referencedColumnName: "managerId" }])

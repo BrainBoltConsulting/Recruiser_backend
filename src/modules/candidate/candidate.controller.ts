@@ -27,7 +27,7 @@ export class CandidateController {
   // @Auth([Role.SUPER_ADMIN])
   @HttpCode(HttpStatus.OK)
   async getCandidateById(
-    @Param('id') id: string,
+    @Param('id') id: number,
   ): Promise<Candidate> {
       return this.candidateService.getUserById(id);
   }
@@ -36,7 +36,7 @@ export class CandidateController {
   @Auth([Role.SUPER_ADMIN], { setUserSession: true})
   @HttpCode(HttpStatus.OK)
   async deleteCandidateById(
-    @UUIDParam('id') id: string,
+    @UUIDParam('id') id: number,
   ): Promise<void> {
     return this.candidateService.deleteUser(id);
   }
@@ -53,9 +53,18 @@ export class CandidateController {
 
   // @Auth([Role.SUPER_ADMIN], { setUserSession: true})
   @Post('invitation/:email/send-email')
+  @HttpCode(HttpStatus.OK)
   async sendInvitationViaEmail(
     @Param('email') email: string,
   ) {
     return this.candidateService.sendInvitationViaEmail(email)
+  }
+
+  @Get(':id/interviews')
+  @HttpCode(HttpStatus.OK)
+  async getSingleCandidatesInterviews(
+    @Param('id') id: number
+  ) {
+    return this.candidateService.getCandidatesInterviews(id);
   }
 }

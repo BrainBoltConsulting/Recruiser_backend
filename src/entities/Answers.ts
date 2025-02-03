@@ -27,11 +27,10 @@ export class Answers {
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
-  @Column()
+  @Column({ nullable: true })
   questionId: string;
 
   @ManyToOne(() => Questions, (questions) => questions.answers)
   @JoinColumn([{ name: "question_id", referencedColumnName: "questionId" }])
   question: Questions;
-
 }

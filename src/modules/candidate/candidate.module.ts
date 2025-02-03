@@ -1,3 +1,4 @@
+import { MeetingModule } from './../meeting/meeting.module';
 import { LoginRepository } from './../../repositories/LoginRepository';
 import { SkillModule } from './../skill/skill.module';
 import { CandidateRepository } from '../../repositories/CandidateRepository';
@@ -18,7 +19,8 @@ import { AuthModule } from '../auth/auth.module';
     ]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),
-    forwardRef(() => SkillModule)
+    forwardRef(() => SkillModule),
+    forwardRef(() => MeetingModule)
   ],
   providers: [CandidateService, JwtStrategy, 
    UserTokenService

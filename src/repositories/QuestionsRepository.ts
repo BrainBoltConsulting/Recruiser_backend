@@ -21,7 +21,7 @@ export class QuestionsRepository extends Repository<Questions> {
 
   async findById(id: string): Promise<Questions> {
     const entity = await this.createQueryBuilder('questions')
-      .where('questions.id = :id', { id })
+      .where('questions.questionId = :id', { id })
       .getOne();
 
     if (!entity) {
