@@ -34,7 +34,7 @@ jobs:
             echo "Checking if the project directory exists..."
             if [ ! -d "$PROJECT_DIR" ]; then
               echo "Cloning the repository..."
-              git clone https://github.com/BrainBoltConsulting/Recruiser_backend "$PROJECT_DIR"
+              git clone git@github.com:BrainBoltConsulting/Recruiser_backend.git "$PROJECT_DIR"
             else
               echo "Project directory already exists. Pulling the latest code..."
               cd "$PROJECT_DIR"
