@@ -22,19 +22,26 @@ jobs:
           script: |
             echo "Starting Deployment..."
 
-            # Go to the project directory or clone it if missing
+            # Define the project path
+            PROJECT_DIR="/home/ec2-user/recruiser/recruiser_backend"
+
+            # Ensure the base directory exists
+            echo "Ensuring base directory exists..."
+            sudo mkdir -p /home/ec2-user/recruiser
+            sudo chown ec2-user:ec2-user /home/ec2-user/recruiser
+
+            # Clone the repository if the project directory doesn't exist
             echo "Checking if the project directory exists..."
-            if [ ! -d "/home/ec2-user/recruiser/recruiser_backend" ]; then
+            if [ ! -d "$PROJECT_DIR" ]; then
               echo "Cloning the repository..."
-              git clone https://github.com/BrainBoltConsulting/Recruiser_backend /home/ec2-user/recruiser/recruiser_backend
+              git clone https://github.com/BrainBoltConsulting/Recruiser_backend "$PROJECT_DIR"
             else
               echo "Project directory already exists. Pulling the latest code..."
+              cd "$PROJECT_DIR"
+              git pull origin master || { echo 'Git pull failed. Exiting...'; exit 1; }
             fi
-            cd /home/ec2-user/recruiser/recruiser_backend
 
-            # Pull the latest code from the master branch
-            echo "Pulling latest code from master branch..."
-            git pull origin master || { echo 'Git pull failed. Exiting...'; exit 1; }
+            cd "$PROJECT_DIR"
 
             # Install Node.js if it's not already installed
             echo "Checking if Node.js is installed..."
