@@ -109,12 +109,13 @@ export class CandidateService {
       type: TokenTypeEnum.SET_PASSWORD
     })
 
-    await this.mailService.send({
-      to: userByEmail.email,
-      subject: "You're Invited! Join Your Meeting on Canint",
-      // tmp solution
-      html: this.mailService.sendInvitationForAMeeting(userByEmail.firstName, "userByEmail"),
-    });  }
+    // await this.mailService.send({
+    //   to: userByEmail.email,
+    //   subject: "You're Invited! Join Your Meeting on Canint",
+    //   // tmp solution
+    //   html: this.mailService.sendInvitationForAMeeting(userByEmail.firstName, "userByEmail", ),
+    // });  
+  }
 
   async getUserById(id: number) {
     const entity = await this.candidateRepository.findByUserId(id);

@@ -7,10 +7,11 @@ import { Questions } from '../entities/Questions';
 @CustomRepository(Questions)
 export class QuestionsRepository extends Repository<Questions> {
 
-  async findByPrimarySkillId(primarySkillId: string): Promise<Questions | null> {
+  async findByPrimarySkillId(primarySkillId: number): Promise<Questions[] | null> {
     return this.createQueryBuilder('questions')
       .where('questions.primarySkillId = :primarySkillId', { primarySkillId })
-      .getOne();
+      .take(13) // tmp solution
+      .getMany();
   }
 
   async getAllSorted(): Promise<Questions[]> {

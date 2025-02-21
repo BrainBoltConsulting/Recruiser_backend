@@ -1,5 +1,6 @@
+import { UtilsProvider } from './../../providers/utils.provider';
 import { Injectable } from '@nestjs/common';
-import AWS, { S3 } from 'aws-sdk';
+import { S3, SharedIniFileCredentials } from 'aws-sdk';
 import type { GetObjectRequest, ManagedUpload } from 'aws-sdk/clients/s3';
 import { InjectAwsService } from 'nest-aws-sdk';
 import { v4 as uuid } from 'uuid';
@@ -87,7 +88,7 @@ export class S3Service {
 
   async getObject(fileName: string, isSystemIntegrationBucket?: boolean) {
     if (process.env.LOCAL_AWS_ACCOUNT_NAME) {
-      const credentials = new AWS.SharedIniFileCredentials({ profile: process.env.LOCAL_AWS_ACCOUNT_NAME });
+      const credentials = new SharedIniFileCredentials({ profile: process.env.LOCAL_AWS_ACCOUNT_NAME });
       this.s3.config.credentials = credentials;
     }
 
@@ -142,5 +143,16 @@ export class S3Service {
         }
       });  
     })
+  }
+
+  async generatePreSignedUrl(s3Uri: string, expiresIn: number = 60 * 5) {
+    const s3Key = UtilsProvider.replaceS3UriWithS3Key(s3Uri)
+    const params = {
+      Bucket: this.bucketName,
+      Key: s3Key,
+      Expires: expiresIn
+    };
+
+    return this.s3.getSignedUrl('getObject', params);
   }
 }

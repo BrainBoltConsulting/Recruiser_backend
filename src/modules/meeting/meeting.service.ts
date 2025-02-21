@@ -1,3 +1,5 @@
+import { ApiConfigService } from './../../shared/services/api-config.service';
+import { MailService } from './../../shared/services/mail.service';
 import { S3Service } from './../../shared/services/aws-s3.service';
 import { ScheduleRepository } from './../../repositories/ScheduleRepository';
 import { UtilsProvider } from './../../providers/utils.provider';
@@ -6,14 +8,18 @@ import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { UserDto } from './../common/modules/user/user.dto';
 import { PollyService } from '../../shared/services/aws-polly.service';
 import { Injectable } from '@nestjs/common';
+import { QuestionService } from '../question/question.service';
 
 @Injectable()
 export class MeetingService {
   constructor(
     private readonly pollyService: PollyService,
     private readonly s3Service: S3Service,
+    private configService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
-    private readonly scheduleRepository: ScheduleRepository
+    private readonly scheduleRepository: ScheduleRepository,
+    private readonly mailService: MailService,
+    private readonly questionService: QuestionService
   ) {}
 
 
@@ -32,7 +38,7 @@ export class MeetingService {
     const candidateEntity = await this.candidateRepository.findById(scheduleInterviewDto.candidateId);
     
     const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting()
-    const fullPath = `http://localhost:3001/meeting/${uniqueIdOfMeeting}`
+    const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`
     const scheduleEntity = await this.scheduleRepository.save(this.scheduleRepository.create({
       scheduledDatetime: scheduleInterviewDto.scheduledDateTime,
       candidate: candidateEntity,
@@ -55,5 +61,33 @@ export class MeetingService {
     const link = response.Location;
 
     return link;
+  }
+
+  async sendInvitionToCandidate(interviewId: string) {
+    const scheduleEntity = await this.scheduleRepository.findById(interviewId);
+    console.log(scheduleEntity)
+    
+    await this.mailService.send({
+      to: scheduleEntity.candidate.email,
+      subject: "You're Invited! Join Your Meeting on Canint",
+      html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, scheduleEntity.candidate.email, scheduleEntity.meetingLink),
+    });  
+  }
+
+  async getMeetingByMeetingLink(meetingLink: string) {
+    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`http://localhost:3001/meeting/${meetingLink}`);
+
+    console.log(scheduleEntity);
+    return scheduleEntity;
+  }
+
+  async getInterviewByScheduleId(scheduleId: string) {
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+
+    const candidateSkills = scheduleEntity.candidate.candidateSkills;
+
+    const questionsBySkill = await this.questionService.getQuestionsBySkill(candidateSkills[0].skillId)
+
+    return questionsBySkill.toDtos();
   }
 }

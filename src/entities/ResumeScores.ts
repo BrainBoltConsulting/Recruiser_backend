@@ -7,7 +7,7 @@ import {
   PrimaryGeneratedColumn,
 } from "typeorm";
 import { Candidate } from "./Candidate";
-import { CriteriaMaster } from "./CriteriaMaster";
+import { ResumeCriteriaMaster } from "./ResumeCriteriaMaster";
 import { Jobs } from "./Jobs";
 
 @Index("resume_scores_pkey", ["scoreId"], { unique: true })
@@ -45,11 +45,11 @@ export class ResumeScores {
   candidate: Candidate;
 
   @ManyToOne(
-    () => CriteriaMaster,
-    (criteriaMaster) => criteriaMaster.resumeScores
+    () => ResumeCriteriaMaster,
+    (resumeCriteriaMaster) => resumeCriteriaMaster.resumeScores
   )
   @JoinColumn([{ name: "criteria_id", referencedColumnName: "criteriaId" }])
-  criteria: CriteriaMaster;
+  criteria: ResumeCriteriaMaster;
 
   @ManyToOne(() => Jobs, (jobs) => jobs.resumeScores)
   @JoinColumn([{ name: "job_id", referencedColumnName: "jobId" }])

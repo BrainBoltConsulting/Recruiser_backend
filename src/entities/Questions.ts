@@ -1,3 +1,5 @@
+import { AbstractEntity } from "../modules/common/entities/abstract.entity";
+import { QuestionDto } from "../modules/common/modules/question/question.dto";
 import {
   Column,
   Entity,
@@ -11,7 +13,7 @@ import { Evaluation } from "./Evaluation";
 
 @Index("questions_pkey", ["questionId"], { unique: true })
 @Entity("questions", { schema: "public" })
-export class Questions {
+export class Questions extends AbstractEntity<QuestionDto> {
   @PrimaryGeneratedColumn({ type: "bigint", name: "question_id" })
   questionId: string;
 
@@ -60,4 +62,6 @@ export class Questions {
 
   @OneToMany(() => Evaluation, (evaluation) => evaluation.question)
   evaluations: Evaluation[];
+
+  dtoClass = QuestionDto
 }

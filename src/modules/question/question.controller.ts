@@ -1,3 +1,4 @@
+import { QuestionDto } from './../common/modules/question/question.dto';
 import { CreateQuestionDto } from './dtos/create-question.dto';
 import { Questions } from '../../entities/Questions';
 import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res, Body, Delete, Param, Header } from '@nestjs/common';
@@ -16,7 +17,7 @@ export class QuestionController {
   @HttpCode(HttpStatus.OK)
   async getAllQuestions(
     @Query() getQuestionsDto: GetQuestionsDto,
-  ): Promise<Questions[]> {
+  ) {
       return this.questionService.getAllQuestions(getQuestionsDto);
   }
 
@@ -46,4 +47,5 @@ export class QuestionController {
   ): Promise<void> {
     return this.questionService.deleteQuestionById(id)
   }
+
 }

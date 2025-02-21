@@ -1,0 +1,54 @@
+name: Deploy NestJS to EC2 (Amazon Linux)
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: SSH into EC2 and Deploy
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          script: |
+            # Go to the project directory or clone it if missing
+            if [ ! -d "/home/ec2-user/recruiser/recruiser_backend" ]; then
+              git clone https://github.com/BrainBoltConsulting/Recruiser_backend /home/ec2-user/recruiser/recruiser_backend
+
+            fi
+            cd /home/ec2-user/recruiser/recruiser_backend
+
+            # Pull the latest code
+            git pull origin master
+
+            # Install Node.js if not already installed
+            if ! command -v node &> /dev/null; then
+              echo "Installing Node.js..."
+              curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+              nvm install 22.14.0
+              nvm use 22.14.0
+              echo 'export NVM_DIR="$HOME/.nvm"' >> ~/.bashrc
+              echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> ~/.bashrc
+              source ~/.bashrc
+            fi
+
+            # Ensure correct Node.js version is used
+            source ~/.bashrc
+            nvm use 22.14.0
+
+            # Install dependencies
+            npm install --force
+
+            # Build the NestJS application
+            npm run build:prod   

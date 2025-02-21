@@ -17,6 +17,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { AgoraModule } from './modules/agora/agora.module';
 import { QuestionModule } from './modules/question/question.module';
 import { MeetingModule } from './modules/meeting/meeting.module';
+import { S3Module } from './modules/s3/s3.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { MeetingModule } from './modules/meeting/meeting.module';
     CandidateModule,
     QuestionModule,
     MeetingModule,
+    S3Module,
     SkillModule,
     ConfigModule.forRoot({
       isGlobal: true,

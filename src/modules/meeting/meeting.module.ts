@@ -1,3 +1,4 @@
+import { QuestionModule } from './../question/question.module';
 import { ScheduleRepository } from './../../repositories/ScheduleRepository';
 import { CandidateModule } from './../candidate/candidate.module';
 import { Module, forwardRef } from '@nestjs/common';
@@ -14,7 +15,8 @@ import { CandidateRepository } from '../../repositories/CandidateRepository';
     TypeOrmExModule.forCustomRepository([CandidateRepository, ScheduleRepository]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),
-    forwardRef(() => CandidateModule)
+    forwardRef(() => CandidateModule),
+    forwardRef(() => QuestionModule)
   ],
   providers: [MeetingService, JwtStrategy],
   controllers: [MeetingController],

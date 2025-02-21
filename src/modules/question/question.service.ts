@@ -20,7 +20,8 @@ export class QuestionService {
   ) {}
 
   async getAllQuestions(getQuestionsDto: GetQuestionsDto) {
-    return this.questionsRepository.getAllSorted()
+    console.log(await this.s3Service.generatePreSignedUrl('question_images/1.png'))
+    return (await this.questionsRepository.getAllSorted()).toDtos();
   }
 
   async getSingleQuestionsVoice(id: string) {
@@ -58,6 +59,12 @@ export class QuestionService {
   async readQuestionByPolly(question: string) {
     console.log(question)
     return this.pollyService.generateSpeechStream(question);
+  }
+
+  async getQuestionsBySkill(skillId: number) {
+    const questionEntities = await this.questionsRepository.findByPrimarySkillId(skillId);
+
+    return questionEntities;
   }
 
 }

@@ -21,7 +21,10 @@ export class ScheduleRepository extends Repository<Schedule> {
 
   async findById(id: string): Promise<Schedule> {
     const entity = await this.createQueryBuilder('schedule')
-      .where('schedule.id = :id', { id })
+      .where('schedule.scheduleId = :id', { id })
+      .leftJoinAndSelect('schedule.candidate', 'candidate')
+      .leftJoinAndSelect('candidate.candidateSkills', 'candidateSkills')
+      .leftJoinAndSelect('candidateSkills.skill', 'skill')
       .getOne();
 
     if (!entity) {
@@ -35,5 +38,11 @@ export class ScheduleRepository extends Repository<Schedule> {
     return this.createQueryBuilder('schedule')
       .where('schedule.candidateId = :candidateId', { candidateId })
       .getMany();
+  }
+
+  async findByMeetingLink(meetingLink: string): Promise<Schedule | null> {
+    return this.createQueryBuilder('schedule')
+      .where('schedule.meetingLink = :meetingLink', { meetingLink })
+      .getOne();
   }
 } 

@@ -58,10 +58,13 @@ export class ApiConfigService {
     return this.getString('CLOUD_FRONT_URL') || ''
   }
 
+  get frontendUrl() {
+    return this.getString('FRONTEND_URL');
+  }
+
   get typeOrmConfig(): TypeOrmModuleOptions {
     const data: TypeOrmModuleOptions = {
       entities: [__dirname + '/../../entities/*'],
-      //migrations: [__dirname + '/../../migrations/*{.ts,.js}'],
       type: 'postgres',
       host: this.getString('DB_HOST'),
       port: this.getNumber('DB_PORT'),

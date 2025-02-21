@@ -3,7 +3,7 @@ import { compare, hashSync } from 'bcryptjs';
 import { isArray } from 'class-validator';
 import { MessageDto } from '../modules/common/modules/shared/message.dto';
 import { BadRequestException } from '@nestjs/common';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 
 export class UtilsProvider {
   /**
@@ -245,4 +245,9 @@ export class UtilsProvider {
     return uniqueId;
   }
 
+  static replaceS3UriWithS3Key(s3Uri: string) {
+    const s3Key = s3Uri.replace(`s3://seekers3data/`, '');
+
+    return s3Key;
+  }
 }

@@ -21,7 +21,7 @@ export class MailService {
   }
 
 
-  sendInvitationForAMeeting(firstName: string, primarySkill: string) {
+  sendInvitationForAMeeting(firstName: string, primarySkill: string, meetingLink: string) {
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -70,7 +70,7 @@ export class MailService {
                 }
                 .cta-button {
                 display: inline-block;
-                background-color: #4A90E2; /* Primary button color */
+                background-color: #adc3e4; /* Primary button color */
                 color: #ffffff;
                 text-decoration: none;
                 font-size: 16px;
@@ -118,7 +118,7 @@ export class MailService {
 
                 <!-- Call-to-Action Button -->
                 <p style="text-align: center;">
-                    <a href="[Meeting Link]" class="cta-button">Join the Meeting</a>
+                    <a href=${meetingLink} class="cta-button">Join the Meeting</a>
                 </p>
 
                 <p>

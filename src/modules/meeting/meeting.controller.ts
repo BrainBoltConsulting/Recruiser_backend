@@ -14,8 +14,8 @@ import { ApiFile } from '../../decorators/swagger.decorator';
 import { FileSizeGuard } from '../../guards/file-size.guard';
 
 
-@Controller('meeting')
-@ApiTags('meeting')
+@Controller('meetings')
+@ApiTags('meetings')
 export class MeetingController {
   constructor(private readonly meetingService: MeetingService) { }
 
@@ -30,6 +30,13 @@ export class MeetingController {
     res.setHeader('Content-Disposition', 'inline; filename="speech.mp3"');
 
     return res.send(await this.meetingService.readInitialMeetingTextByPolly(user));
+  }
+
+  @Get('/interview/by-link/:meetingLink')
+  async getMeetingByMeetingUrl(
+    @Param('meetingLink') meetingLink: string
+  ) {
+    return this.meetingService.getMeetingByMeetingLink(meetingLink)
   }
 
   @Post('/interview/schedule')
@@ -65,6 +72,22 @@ export class MeetingController {
   ) {
     console.log(file)
     return this.meetingService.finishInterview(file)
+  }
+
+  @Get('/interview/:interviewId')
+  @HttpCode(HttpStatus.OK)
+  async getInterviewById(
+    @Param('interviewId') interviewId: string
+  ) {
+    return this.meetingService.getInterviewByScheduleId(interviewId);
+  }
+
+  @Post('/interview/:interviewId/invite')
+  @HttpCode(HttpStatus.OK)
+  async sendInvitationToCandidate(
+    @Param('interviewId') interviewId: string
+  ) {
+    return this.meetingService.sendInvitionToCandidate(interviewId)
   }
 
   @Post('/interview/:interviewId/questions/:questionId/recording')

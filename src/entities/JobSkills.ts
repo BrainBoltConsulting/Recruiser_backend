@@ -30,6 +30,9 @@ export class JobSkills {
   @PrimaryGeneratedColumn({ type: "bigint", name: "job_skill_id" })
   jobSkillId: string;
 
+  @Column("bigint", { name: "skill_sequence" })
+  skillSequence: string;
+
   @ManyToOne(() => Jobs, (jobs) => jobs.jobSkills)
   @JoinColumn([{ name: "job_id", referencedColumnName: "jobId" }])
   job: Jobs;
