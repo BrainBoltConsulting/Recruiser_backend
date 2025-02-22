@@ -38,9 +38,8 @@ jobs:
 
             cd "$PROJECT_DIR"
 
-            # Check if .temp.env exists and copy it as .env
+            # Copy .temp.env to .env
             if [ -f "../.temp.env" ]; then
-              echo "Copying .temp.env to .env..."
               cp ../.temp.env .env
             else
               echo "ERROR: .temp.env file is missing! Exiting..."
@@ -54,6 +53,19 @@ jobs:
 
             # Build the NestJS application
             npm run build:prod || { echo 'Failed to build the NestJS application. Exiting...'; exit 1; }
+
+            # Start SSH Tunnel for PostgreSQL
+            echo "Setting up SSH Tunnel for PostgreSQL..."
+            SSH_TUNNEL_CMD="ssh -i ../BastionHostKeyPair.pem -L 5433:databasets.chygq4ecec7u.us-east-2.rds.amazonaws.com:5432 ec2-user@52.15.194.170 -N -f"
+
+            # Check if the SSH tunnel is already running
+            if pgrep -f "$SSH_TUNNEL_CMD" > /dev/null; then
+              echo "SSH Tunnel is already running."
+            else
+              echo "Starting SSH Tunnel..."
+              nohup $SSH_TUNNEL_CMD > /dev/null 2>&1 &
+              sleep 5  # Give it time to establish
+            fi
 
             # Load environment variables and start the server
             export $(grep -v '^#' .env | xargs)
