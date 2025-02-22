@@ -3,7 +3,7 @@ name: Deploy NestJS to EC2 (Amazon Linux)
 on:
   push:
     branches:
-      - master  # Adjust to the branch you're working with
+      - master  
 
 jobs:
   deploy:
@@ -22,58 +22,41 @@ jobs:
           script: |
             echo "Starting Deployment..."
 
-            # Define the project path
             PROJECT_DIR="/home/ec2-user/recruiser/recruiser_backend"
 
-            # Ensure the base directory exists
-            echo "Ensuring base directory exists..."
+            # Ensure project directory exists
             sudo mkdir -p /home/ec2-user/recruiser
             sudo chown ec2-user:ec2-user /home/ec2-user/recruiser
 
-            # Clone the repository if the project directory doesn't exist
-            echo "Checking if the project directory exists..."
+            # Clone or update repo
             if [ ! -d "$PROJECT_DIR" ]; then
-              echo "Cloning the repository..."
               git clone git@github.com:BrainBoltConsulting/Recruiser_backend.git "$PROJECT_DIR"
             else
-              echo "Project directory already exists. Pulling the latest code..."
               cd "$PROJECT_DIR"
               git pull origin master || { echo 'Git pull failed. Exiting...'; exit 1; }
             fi
 
             cd "$PROJECT_DIR"
 
-            # Install Node.js if it's not already installed
-            echo "Checking if Node.js is installed..."
-            if ! command -v node &> /dev/null; then
-              echo "Node.js not found. Installing Node.js..."
-              curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash || { echo 'Failed to install NVM. Exiting...'; exit 1; }
-              export NVM_DIR="$HOME/.nvm"
-              [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-              nvm install 22.14.0 || { echo 'Failed to install Node.js 22.14.0 using NVM. Exiting...'; exit 1; }
-              nvm use 22.14.0 || { echo 'Failed to use Node.js 22.14.0 with NVM. Exiting...'; exit 1; }
-              echo 'export NVM_DIR="$HOME/.nvm"' >> ~/.bashrc
-              echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> ~/.bashrc
-              source ~/.bashrc || { echo 'Failed to source .bashrc. Exiting...'; exit 1; }
+            # Check if .temp.env exists and copy it as .env
+            if [ -f "../.temp.env" ]; then
+              echo "Copying .temp.env to .env..."
+              cp ../.temp.env .env
             else
-              echo "Node.js is already installed."
+              echo "ERROR: .temp.env file is missing! Exiting..."
+              exit 1
             fi
 
-            # Ensure correct Node.js version is used
-            echo "Ensuring Node.js version is set to 22.14.0..."
-            source ~/.bashrc || { echo 'Failed to source .bashrc. Exiting...'; exit 1; }
-            nvm use 22.14.0 || { echo 'Failed to switch Node.js to 22.14.0 using NVM. Exiting...'; exit 1; }
+            echo "Environment variables set successfully."
 
             # Install dependencies
-            echo "Installing dependencies..."
             npm install --force || { echo 'Failed to install npm dependencies. Exiting...'; exit 1; }
 
             # Build the NestJS application
-            echo "Building the NestJS application..."
             npm run build:prod || { echo 'Failed to build the NestJS application. Exiting...'; exit 1; }
 
-            # Start the server
-            echo "Starting the server..."
+            # Load environment variables and start the server
+            export $(grep -v '^#' .env | xargs)
             nohup npm run start:prod > output.log 2>&1 &
 
             echo "Deployment completed successfully!"
