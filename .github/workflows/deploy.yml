@@ -72,4 +72,8 @@ jobs:
             echo "Building the NestJS application..."
             npm run build:prod || { echo 'Failed to build the NestJS application. Exiting...'; exit 1; }
 
+            # Start the server
+            echo "Starting the server..."
+            nohup npm run start:prod > output.log 2>&1 &
+
             echo "Deployment completed successfully!"
