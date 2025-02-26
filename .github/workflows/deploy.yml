@@ -28,8 +28,8 @@ jobs:
             SSL_CERT="$CERTS_DIR/cert.pem"
 
             # Ensure project directory exists
-            sudo mkdir -p /home/ec2-user/recruiser
-            sudo chown ec2-user:ec2-user /home/ec2-user/recruiser
+            sudo mkdir -p "$PROJECT_DIR"
+            sudo chown ec2-user:ec2-user "$PROJECT_DIR"
 
             # Clone or update repo
             if [ ! -d "$PROJECT_DIR" ]; then
@@ -78,8 +78,12 @@ jobs:
 
             echo "SSL certificates found. Starting application with SSL..."
 
+            # Export SSL certificate paths as environment variables
+            export SSL_KEY="$SSL_KEY"
+            export SSL_CERT="$SSL_CERT"
+
             # Load environment variables and start the server with SSL
             export $(grep -v '^#' .env | xargs)
-            nohup npm run start:prod -- --ssl-keyfile="$SSL_KEY" --ssl-certfile="$SSL_CERT" > output.log 2>&1 &
+            nohup npm run start:prod -- --https > output.log 2>&1 &
 
             echo "Deployment completed successfully!"
