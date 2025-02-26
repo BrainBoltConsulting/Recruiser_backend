@@ -23,6 +23,9 @@ jobs:
             echo "Starting Deployment..."
 
             PROJECT_DIR="/home/ec2-user/recruiser/recruiser_backend"
+            CERTS_DIR="/home/ec2-user/certs"
+            SSL_KEY="$CERTS_DIR/key.pem"
+            SSL_CERT="$CERTS_DIR/cert.pem"
 
             # Ensure project directory exists
             sudo mkdir -p /home/ec2-user/recruiser
@@ -58,25 +61,25 @@ jobs:
             echo "Setting up SSH Tunnel for PostgreSQL..."
             SSH_TUNNEL_CMD="ssh -i ../BastionHostKeyPair.pem -L 5433:databasets.chygq4ecec7u.us-east-2.rds.amazonaws.com:5432 ec2-user@52.15.194.170 -N -f"
 
-            # Check if the SSH tunnel is already running by using `ps aux`
-            if ps aux | grep -v grep | grep -q "$SSH_TUNNEL_CMD"; then
+            # Check if the SSH tunnel is already running
+            if pgrep -f "$SSH_TUNNEL_CMD" > /dev/null; then
               echo "SSH Tunnel is already running."
             else
               echo "Starting SSH Tunnel..."
               nohup $SSH_TUNNEL_CMD > /dev/null 2>&1 &
-              sleep 10  # Give it more time to establish
-
-              # Check again to ensure the tunnel is running
-              if ps aux | grep -v grep | grep -q "$SSH_TUNNEL_CMD"; then
-                echo "SSH Tunnel started successfully."
-              else
-                echo "ERROR: Failed to start SSH Tunnel. Exiting..."
-                exit 1
-              fi
+              sleep 10  # Give it time to establish
             fi
 
-            # Load environment variables and start the server
+            # Ensure SSL certificates exist
+            if [ ! -f "$SSL_KEY" ] || [ ! -f "$SSL_CERT" ]; then
+              echo "ERROR: SSL certificates are missing! Exiting..."
+              exit 1
+            fi
+
+            echo "SSL certificates found. Starting application with SSL..."
+
+            # Load environment variables and start the server with SSL
             export $(grep -v '^#' .env | xargs)
-            nohup npm run start:prod > output.log 2>&1 &
+            nohup npm run start:prod -- --ssl-keyfile="$SSL_KEY" --ssl-certfile="$SSL_CERT" > output.log 2>&1 &
 
             echo "Deployment completed successfully!"
