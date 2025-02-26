@@ -10,7 +10,7 @@
     "lint": "eslint . --ext .ts",
     "test": "jest",
     "start": "nodemon --exec ts-node src/main.ts",
-    "start:prod": "node dist/main.js",
+    "start:prod": "node dist/main.js --https --ssl-key=/home/ec2-user/certs/key.pem --ssl-cert=/home/ec2-user/certs/cert.pem",
     "typeorm": "ts-node node_modules/typeorm/cli.js  -d ormconfig",
     "migration:generate": "yarn run typeorm migration:generate",
     "migration:create": "yarn run typeorm migration:create",

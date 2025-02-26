@@ -104,6 +104,6 @@ jobs:
 
             # Load environment variables and start the server with SSL
             export $(grep -v '^#' .env | xargs)
-            nohup npm run start:prod -- --https > output.log 2>&1 &
+            nohup npm run start:prod >> output.log 2>&1 &
 
             echo "Deployment completed successfully!"
