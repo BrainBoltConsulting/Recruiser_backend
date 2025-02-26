@@ -62,12 +62,20 @@ jobs:
             SSH_TUNNEL_CMD="ssh -i ../BastionHostKeyPair.pem -L 5433:databasets.chygq4ecec7u.us-east-2.rds.amazonaws.com:5432 ec2-user@52.15.194.170 -N -f"
 
             # Check if the SSH tunnel is already running
-            if pgrep -f "$SSH_TUNNEL_CMD" > /dev/null; then
+            if ps aux | grep -v grep | grep -q "$SSH_TUNNEL_CMD"; then
               echo "SSH Tunnel is already running."
             else
               echo "Starting SSH Tunnel..."
               nohup $SSH_TUNNEL_CMD > /dev/null 2>&1 &
-              sleep 10  # Give it time to establish
+              sleep 10  # Give it more time to establish
+
+              # Check again to ensure the tunnel is running
+              if ps aux | grep -v grep | grep -q "$SSH_TUNNEL_CMD"; then
+                echo "SSH Tunnel started successfully."
+              else
+                echo "ERROR: Failed to start SSH Tunnel. Exiting..."
+                exit 1
+              fi
             fi
 
             # Ensure SSL certificates exist
