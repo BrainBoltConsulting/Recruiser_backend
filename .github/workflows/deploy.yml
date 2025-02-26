@@ -26,6 +26,7 @@ jobs:
             CERTS_DIR="/home/ec2-user/certs"
             SSL_KEY="$CERTS_DIR/key.pem"
             SSL_CERT="$CERTS_DIR/cert.pem"
+            PORT=3000  # Adjust this port if necessary for your app
 
             # Ensure project directory exists
             sudo mkdir -p "$PROJECT_DIR"
@@ -85,6 +86,17 @@ jobs:
             fi
 
             echo "SSL certificates found. Starting application with SSL..."
+
+            # Check if the app is already running on the port
+            if lsof -i:$PORT; then
+              echo "Application is already running on port $PORT. Stopping previous instance..."
+              # Get the process ID (PID) of the running application and kill it
+              APP_PID=$(lsof -t -i:$PORT)
+              kill -9 $APP_PID || { echo "Failed to stop previous instance. Exiting..."; exit 1; }
+              echo "Previous instance stopped successfully."
+            else
+              echo "No previous instance found. Proceeding with deployment."
+            fi
 
             # Export SSL certificate paths as environment variables
             export SSL_KEY="$SSL_KEY"
