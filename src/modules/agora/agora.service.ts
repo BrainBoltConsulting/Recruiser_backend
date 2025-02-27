@@ -20,15 +20,6 @@ export class AgoraService {
       throw new BadRequestException('UID is required');
     }
 
-    // let rtcRole;
-    // if (role === 'publisher') {
-    //   rtcRole = RtcRole.PUBLISHER;
-    // } else if (role === 'audience') {
-    //   rtcRole = RtcRole.SUBSCRIBER;
-    // } else {
-    //   throw new BadRequestException('Invalid role');
-    // }
-
     const expireTime = 3600;
     const currentTime = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTime + expireTime;
@@ -41,8 +32,6 @@ export class AgoraService {
         rtcRole,
         privilegeExpireTime,
     );
-
-    console.log(accessToken)
 
     return { accessToken }
   }
