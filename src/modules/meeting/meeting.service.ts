@@ -15,7 +15,7 @@ export class MeetingService {
   constructor(
     private readonly pollyService: PollyService,
     private readonly s3Service: S3Service,
-    private configService: ApiConfigService,
+    private readonly configService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
     private readonly scheduleRepository: ScheduleRepository,
     private readonly mailService: MailService,
@@ -74,8 +74,8 @@ export class MeetingService {
     });  
   }
 
-  async getMeetingByMeetingLink(meetingLink: string) {
-    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`http://localhost:3001/meeting/${meetingLink}`);
+  async  getMeetingByMeetingLink(meetingLink: string) {
+    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`${this.configService.frontendUrl}/meeting/${meetingLink}`);
 
     console.log(scheduleEntity);
     return scheduleEntity;
