@@ -126,7 +126,9 @@ export class ApiConfigService {
   get mailConfig() {
     return {
       transport: {
-        service: this.getString('MAIL_SERVICE'),
+        host: this.getString('MAIL_SES_HOST'),
+        port: this.getNumber('MAIL_SES_PORT'),
+        secure: true,
         auth: {
           user: this.getString('MAIL_USER'),
           pass: this.getString('MAIL_PASSWORD'),

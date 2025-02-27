@@ -52,13 +52,13 @@ export class CandidateController {
   // }
 
   // @Auth([Role.SUPER_ADMIN], { setUserSession: true})
-  @Post('invitation/:email/send-email')
-  @HttpCode(HttpStatus.OK)
-  async sendInvitationViaEmail(
-    @Param('email') email: string,
-  ) {
-    return this.candidateService.sendInvitationViaEmail(email)
-  }
+  // @Post('invitation/:email/send-email')
+  // @HttpCode(HttpStatus.OK)
+  // async sendInvitationViaEmail(
+  //   @Param('email') email: string,
+  // ) {
+  //   return this.candidateService.sendInvitationViaEmail(email)
+  // }
 
   @Get(':id/interviews')
   @HttpCode(HttpStatus.OK)
