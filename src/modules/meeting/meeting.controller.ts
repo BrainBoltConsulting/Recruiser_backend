@@ -32,11 +32,11 @@ export class MeetingController {
     return res.send(await this.meetingService.readInitialMeetingTextByPolly(user));
   }
 
-  @Get('/interview/by-link/:meetingLink')
+  @Get('/interview/by-link/:meetingPostfix')
   async getMeetingByMeetingUrl(
-    @Param('meetingLink') meetingLink: string
+    @Param('meetingPostfix') meetingPostfix: string
   ) {
-    return this.meetingService.getMeetingByMeetingLink(meetingLink)
+    return this.meetingService.getMeetingByMeetingLink(meetingPostfix)
   }
 
   @Post('/interview/schedule')

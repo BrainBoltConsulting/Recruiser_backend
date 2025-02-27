@@ -74,8 +74,8 @@ export class MeetingService {
     });  
   }
 
-  async  getMeetingByMeetingLink(meetingLink: string) {
-    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`${this.configService.frontendUrl}/meeting/${meetingLink}`);
+  async  getMeetingByMeetingLink(meetingPostfix: string) {
+    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`${this.configService.frontendUrl}/meeting/${meetingPostfix}`);
 
     console.log(scheduleEntity);
     return scheduleEntity;
