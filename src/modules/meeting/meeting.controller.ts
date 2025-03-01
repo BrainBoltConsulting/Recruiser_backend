@@ -7,7 +7,7 @@ import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res, Body, Delete, 
 import { ApiTags } from '@nestjs/swagger';
 import { MeetingService } from './meeting.service';
 import { Response } from 'express';
-import { Auth } from '../../decorators/http.decorator';
+import { Auth, AuthWithoutRequiredUser } from '../../decorators/http.decorator';
 import { Role } from '../../constants/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiFile } from '../../decorators/swagger.decorator';
@@ -44,7 +44,6 @@ export class MeetingController {
   async scheduleInterview(
     @Body() scheduleInterviewDto: ScheduleInterviewDto
   ) {
-    console.log(scheduleInterviewDto)
     return this.meetingService.scheduleInterview(scheduleInterviewDto)
   }
 
@@ -90,6 +89,8 @@ export class MeetingController {
     return this.meetingService.sendInvitionToCandidate(interviewId)
   }
 
+  // tmp solution
+  @AuthWithoutRequiredUser()
   @Post('/interview/:interviewId/questions/:questionId/recording')
   @UseInterceptors(FileInterceptor('videoFile'))
   @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
@@ -102,9 +103,9 @@ export class MeetingController {
   async saveRecordingForQuestionByMeeting(
     @Param('interviewId') interviewId: string, 
     @Param('questionId') questionId: string, 
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
+    @AuthUser() user: UserDto
   ) {
-    console.log(file)
     return this.meetingService.saveRecordingForQuestionByMeeting(file, interviewId, questionId)
   }
   

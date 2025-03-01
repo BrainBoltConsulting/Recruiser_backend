@@ -1,3 +1,4 @@
+import { EvaluationRepository } from './../../repositories/EvaluationRepository';
 import { QuestionModule } from './../question/question.module';
 import { ScheduleRepository } from './../../repositories/ScheduleRepository';
 import { CandidateModule } from './../candidate/candidate.module';
@@ -12,7 +13,7 @@ import { CandidateRepository } from '../../repositories/CandidateRepository';
 
 @Module({
   imports: [
-    TypeOrmExModule.forCustomRepository([CandidateRepository, ScheduleRepository]),
+    TypeOrmExModule.forCustomRepository([CandidateRepository, ScheduleRepository, EvaluationRepository]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),
     forwardRef(() => CandidateModule),

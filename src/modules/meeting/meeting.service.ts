@@ -1,3 +1,4 @@
+import { EvaluationRepository } from './../../repositories/EvaluationRepository';
 import { ApiConfigService } from './../../shared/services/api-config.service';
 import { MailService } from './../../shared/services/mail.service';
 import { S3Service } from './../../shared/services/aws-s3.service';
@@ -18,6 +19,7 @@ export class MeetingService {
     private readonly configService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
     private readonly scheduleRepository: ScheduleRepository,
+    private readonly evaluationRepository: EvaluationRepository,
     private readonly mailService: MailService,
     private readonly questionService: QuestionService
   ) {}
@@ -60,12 +62,19 @@ export class MeetingService {
     const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
     const link = response.Location;
 
-    return link;
+    const evaluationEntity = await this.evaluationRepository.save(this.evaluationRepository.create({
+      questionId,
+      interviewId: 20,
+      asrfilename: fileName,
+      asrfileS3key: link,
+    }));
+
+
+    return evaluationEntity;
   }
 
   async sendInvitionToCandidate(interviewId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(interviewId);
-    console.log(scheduleEntity)
     
     await this.mailService.send({
       to: scheduleEntity.candidate.email,

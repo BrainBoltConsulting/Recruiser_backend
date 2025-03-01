@@ -42,6 +42,13 @@ export class Evaluation {
   })
   grammarScore: string | null;
 
+  @Column({ nullable: true, name: 'question_id' })
+  questionId: string;
+
+  @Column({ nullable: true, name: 'interview_id' })
+  interviewId: number;
+
+
   @Column("numeric", {
     name: "disfluency_score",
     nullable: true,
