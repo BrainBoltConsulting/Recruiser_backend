@@ -13,14 +13,14 @@ import { ApiConfigService } from './shared/services/api-config.service';
 async function bootstrap() {
   initializeTransactionalContext();
   
-  // const httpsOptions = {
-  //   key: fs.readFileSync('/home/ec2-user/certs/key.pem'),
-  //   cert: fs.readFileSync('/home/ec2-user/certs/cert.pem'),
-  // };
+  const httpsOptions = {
+    key: fs.readFileSync('/home/ec2-user/certs/key.pem'),
+    cert: fs.readFileSync('/home/ec2-user/certs/cert.pem'),
+  };
 
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
-    // httpsOptions,
+    httpsOptions,
   });
   
   const config = app.select(AppModule).get(ApiConfigService);
