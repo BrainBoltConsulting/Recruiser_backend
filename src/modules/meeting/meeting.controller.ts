@@ -12,6 +12,7 @@ import { Role } from '../../constants/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiFile } from '../../decorators/swagger.decorator';
 import { FileSizeGuard } from '../../guards/file-size.guard';
+import { Candidate } from '../../entities/Candidate';
 
 
 @Controller('meetings')
@@ -104,9 +105,8 @@ export class MeetingController {
     @Param('interviewId') interviewId: string, 
     @Param('questionId') questionId: string, 
     @UploadedFile() file: Express.Multer.File,
-    @AuthUser() user: UserDto
+    @AuthUser() user: Candidate
   ) {
-    return this.meetingService.saveRecordingForQuestionByMeeting(file, interviewId, questionId)
+    return this.meetingService.saveRecordingForQuestionByMeeting(file, interviewId, questionId, user)
   }
-  
 }

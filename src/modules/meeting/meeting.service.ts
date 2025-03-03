@@ -1,3 +1,4 @@
+import { Candidate } from './../../entities/Candidate';
 import { EvaluationRepository } from './../../repositories/EvaluationRepository';
 import { ApiConfigService } from './../../shared/services/api-config.service';
 import { MailService } from './../../shared/services/mail.service';
@@ -57,8 +58,8 @@ export class MeetingService {
     return link;
   }
 
-  async saveRecordingForQuestionByMeeting(file: Express.Multer.File, interviewId: string, questionId: string) {
-    const fileName = `MId-${interviewId}-QId-${questionId}-${Date.now()}`
+  async saveRecordingForQuestionByMeeting(file: Express.Multer.File, interviewId: string, questionId: string, candidate: Candidate) {
+    const fileName = `SId-${interviewId}-QId-${questionId}-CId-${candidate.candidateId}-${Date.now()}`
     const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
     const link = response.Location;
 
@@ -68,7 +69,6 @@ export class MeetingService {
       asrfilename: fileName,
       asrfileS3key: link,
     }));
-
 
     return evaluationEntity;
   }
