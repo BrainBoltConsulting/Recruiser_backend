@@ -7,10 +7,10 @@ import { Questions } from '../entities/Questions';
 @CustomRepository(Questions)
 export class QuestionsRepository extends Repository<Questions> {
 
-  async findByPrimarySkillId(primarySkillId: number): Promise<Questions[] | null> {
+  async findByPrimarySkillId(primarySkillId: number, questionsTakeNumber: string): Promise<Questions[] | null> {
     return this.createQueryBuilder('questions')
       .where('questions.primarySkillId = :primarySkillId', { primarySkillId })
-      .take(13) // tmp solution
+      .take(Number(questionsTakeNumber)) // tmp solution
       .getMany();
   }
 

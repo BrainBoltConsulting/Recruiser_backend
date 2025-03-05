@@ -1,3 +1,4 @@
+import { ConfigRepository } from './../../repositories/ConfigRepository';
 import { Candidate } from './../../entities/Candidate';
 import { EvaluationRepository } from './../../repositories/EvaluationRepository';
 import { ApiConfigService } from './../../shared/services/api-config.service';
@@ -20,6 +21,7 @@ export class MeetingService {
     private readonly configService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
     private readonly scheduleRepository: ScheduleRepository,
+    private readonly configRepository: ConfigRepository,
     private readonly evaluationRepository: EvaluationRepository,
     private readonly mailService: MailService,
     private readonly questionService: QuestionService
@@ -92,10 +94,10 @@ export class MeetingService {
 
   async getInterviewByScheduleId(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
-
     const candidateSkills = scheduleEntity.candidate.candidateSkills;
 
-    const questionsBySkill = await this.questionService.getQuestionsBySkill(candidateSkills[0].skillId)
+    const getQuestionsAmountEntity = await this.configRepository.getQuestionsbySkillSequence(1);
+    const questionsBySkill = await this.questionService.getQuestionsBySkill(candidateSkills[0].skillId, getQuestionsAmountEntity.configValue)
 
     return questionsBySkill.toDtos();
   }

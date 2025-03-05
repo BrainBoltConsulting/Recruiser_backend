@@ -57,12 +57,11 @@ export class QuestionService {
   }
 
   async readQuestionByPolly(question: string) {
-    console.log(question)
     return this.pollyService.generateSpeechStream(question);
   }
 
-  async getQuestionsBySkill(skillId: number) {
-    const questionEntities = await this.questionsRepository.findByPrimarySkillId(skillId);
+  async getQuestionsBySkill(skillId: number, questionsTakeNumber: string) {
+    const questionEntities = await this.questionsRepository.findByPrimarySkillId(skillId, questionsTakeNumber);
 
     return questionEntities;
   }

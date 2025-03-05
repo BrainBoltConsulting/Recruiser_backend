@@ -74,12 +74,12 @@ export class MeetingController {
     return this.meetingService.finishInterview(file)
   }
 
-  @Get('/interview/:interviewId')
+  @Get('/interview/:scheduleId')
   @HttpCode(HttpStatus.OK)
   async getInterviewById(
-    @Param('interviewId') interviewId: string
+    @Param('scheduleId') scheduleId: string
   ) {
-    return this.meetingService.getInterviewByScheduleId(interviewId);
+    return this.meetingService.getInterviewByScheduleId(scheduleId);
   }
 
   @Post('/interview/:interviewId/invite')
