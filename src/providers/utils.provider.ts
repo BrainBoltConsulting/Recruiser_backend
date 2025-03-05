@@ -245,9 +245,15 @@ export class UtilsProvider {
     return uniqueId;
   }
 
-  static replaceS3UriWithS3Key(s3Uri: string) {
+  static replaceS3UriWithS3Key(s3Uri: string): string {
     const s3Key = s3Uri.replace(`s3://seekers3data/`, '');
 
     return s3Key;
+  }
+
+  static createS3UriFromS3BucketAndKey(bucketName: string, key: string): string {
+    const baseS3UriPath = 's3://seekers3data/';
+
+    return baseS3UriPath + key
   }
 }

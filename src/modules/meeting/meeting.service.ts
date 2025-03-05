@@ -62,14 +62,15 @@ export class MeetingService {
 
   async saveRecordingForQuestionByMeeting(file: Express.Multer.File, interviewId: string, questionId: string, candidate: Candidate) {
     const fileName = `SId-${interviewId}-QId-${questionId}-CId-${candidate.candidateId}-${Date.now()}`
-    const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
-    const link = response.Location;
+    const responseFromS3 = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
+    const link = responseFromS3.Location;
+    console.log(responseFromS3);
+    const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(responseFromS3.Bucket, responseFromS3.Key);
 
     const evaluationEntity = await this.evaluationRepository.save(this.evaluationRepository.create({
       questionId,
       interviewId: 20,
-      asrfilename: fileName,
-      asrfileS3key: link,
+      videofileS3key: s3Uri,
     }));
 
     return evaluationEntity;
