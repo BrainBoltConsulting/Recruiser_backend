@@ -16,7 +16,7 @@ import { Manager } from "./Manager";
 @Entity("interview", { schema: "public" })
 export class Interview {
   @PrimaryGeneratedColumn({ type: "bigint", name: "interview_id" })
-  interviewId: string;
+  interviewId: number;
 
   @Column("timestamp without time zone", {
     name: "interview_date",

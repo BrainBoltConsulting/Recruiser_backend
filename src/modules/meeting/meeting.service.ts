@@ -12,6 +12,7 @@ import { UserDto } from './../common/modules/user/user.dto';
 import { PollyService } from '../../shared/services/aws-polly.service';
 import { Injectable } from '@nestjs/common';
 import { QuestionService } from '../question/question.service';
+import { InterviewRepository } from '../../repositories/InterviewRepository';
 
 @Injectable()
 export class MeetingService {
@@ -20,6 +21,7 @@ export class MeetingService {
     private readonly s3Service: S3Service,
     private readonly configService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
+    private readonly interviewRepository: InterviewRepository,
     private readonly scheduleRepository: ScheduleRepository,
     private readonly configRepository: ConfigRepository,
     private readonly evaluationRepository: EvaluationRepository,
@@ -63,13 +65,12 @@ export class MeetingService {
   async saveRecordingForQuestionByMeeting(file: Express.Multer.File, interviewId: string, questionId: string, candidate: Candidate) {
     const fileName = `SId-${interviewId}-QId-${questionId}-CId-${candidate.candidateId}-${Date.now()}`
     const responseFromS3 = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
-    const link = responseFromS3.Location;
-    console.log(responseFromS3);
     const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(responseFromS3.Bucket, responseFromS3.Key);
-
+    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(candidate.candidateId); // tmp solution
+    
     const evaluationEntity = await this.evaluationRepository.save(this.evaluationRepository.create({
       questionId,
-      interviewId: 20,
+      interviewId: interviewEntityByCandidateId?.interviewId || 20,  // tmp solution
       videofileS3key: s3Uri,
     }));
 
@@ -86,17 +87,15 @@ export class MeetingService {
     });  
   }
 
-  async  getMeetingByMeetingLink(meetingPostfix: string) {
+  async getMeetingByMeetingLink(meetingPostfix: string) {
     const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`${this.configService.frontendUrl}/meeting/${meetingPostfix}`);
 
-    console.log(scheduleEntity);
     return scheduleEntity;
   }
 
   async getInterviewByScheduleId(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const candidateSkills = scheduleEntity.candidate.candidateSkills;
-
     const getQuestionsAmountEntity = await this.configRepository.getQuestionsbySkillSequence(1);
     const questionsBySkill = await this.questionService.getQuestionsBySkill(candidateSkills[0].skillId, getQuestionsAmountEntity.configValue)
 
