@@ -3,7 +3,7 @@ import { AuthWithoutRequiredUserGuard } from './../../guards/auth-without-requir
 import { UserDto } from './../common/modules/user/user.dto';
 import { AuthUser } from './../../decorators/auth.decorator';
 import { Questions } from '../../entities/Questions';
-import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res, Body, Delete, Param, Header, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res, Body, Delete, Param, Header, UseInterceptors, UploadedFile, UseGuards, Options } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { MeetingService } from './meeting.service';
 import { Response } from 'express';
@@ -108,5 +108,15 @@ export class MeetingController {
     @AuthUser() user: Candidate
   ) {
     return this.meetingService.saveRecordingForQuestionByMeeting(file, interviewId, questionId, user)
+  }
+
+  @Options('/interview/:interviewId/questions/:questionId/recording')
+  handleOptions() {
+    return {
+      'Access-Control-Allow-Origin': 'https://hire2o.net',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
+      'Access-Control-Allow-Credentials': 'true',
+    };
   }
 }
