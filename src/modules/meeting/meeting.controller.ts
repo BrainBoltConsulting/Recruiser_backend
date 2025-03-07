@@ -109,14 +109,4 @@ export class MeetingController {
   ) {
     return this.meetingService.saveRecordingForQuestionByMeeting(file, interviewId, questionId, user)
   }
-
-  @Options('/interview/:interviewId/questions/:questionId/recording')
-  handleOptions() {
-    return {
-      'Access-Control-Allow-Origin': 'https://hire2o.net',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-      'Access-Control-Allow-Credentials': 'true',
-    };
-  }
 }
