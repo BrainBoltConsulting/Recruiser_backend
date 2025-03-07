@@ -33,6 +33,9 @@ export class Interview {
   })
   createdOn: Date;
 
+  @Column({ nullable: true, name: 'candidate_id' })
+  candidateId: number;
+
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
