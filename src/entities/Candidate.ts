@@ -20,7 +20,7 @@ import { Schedule } from "./Schedule";
 @Entity("candidate", { schema: "public" })
 export class Candidate {
   @PrimaryGeneratedColumn({ type: "bigint", name: "candidate_id" })
-  candidateId: string;
+  candidateId: number;
 
   @Column("text", { name: "domain", nullable: true })
   domain: string | null;

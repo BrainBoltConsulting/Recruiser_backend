@@ -1,7 +1,7 @@
 import type { IAbstract } from '../interfaces/IAbstract';
 
 export class AbstractDto {
-  id: string;
+  id: string | number;
 
   updatedAt: Date;
 

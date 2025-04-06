@@ -8,7 +8,7 @@ import { UserTokenDto } from '../common/modules/auth/user-token.dto';
 @Unique(['userId', 'type'])
 export class UserTokenEntity extends AbstractEntity<UserTokenDto> {
   @Column()
-  userId: string;
+  userId: number;
 
   @Column()
   token: string;

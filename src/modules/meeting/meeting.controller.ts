@@ -40,7 +40,7 @@ export class MeetingController {
     return this.meetingService.getMeetingByMeetingLink(meetingPostfix)
   }
 
-  @Post('/interview/schedule')
+  @Post('/schedule')
   @HttpCode(HttpStatus.OK)
   async scheduleInterview(
     @Body() scheduleInterviewDto: ScheduleInterviewDto
@@ -48,16 +48,15 @@ export class MeetingController {
     return this.meetingService.scheduleInterview(scheduleInterviewDto)
   }
 
-  @Post('/interview/:id/start')
+  @Post('/schedule/:id/start')
   @HttpCode(HttpStatus.OK)
   async startInterview(
     @Param('id') id: string, 
-    @Body() scheduleInterviewDto: ScheduleInterviewDto
   ) {
-    return this.meetingService.scheduleInterview(scheduleInterviewDto)
+    return this.meetingService.startInterview(id)
   }
 
-  @Post('/interview/:id/finish')
+  @Post('/schedule/:id/finish')
   @UseInterceptors(FileInterceptor('videoFile'))
   @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
   @ApiFile([{ name: 'videoFile' }], {
@@ -74,7 +73,7 @@ export class MeetingController {
     return this.meetingService.finishInterview(file)
   }
 
-  @Get('/interview/:scheduleId')
+  @Get('/schedule/:scheduleId')
   @HttpCode(HttpStatus.OK)
   async getInterviewById(
     @Param('scheduleId') scheduleId: string
@@ -82,12 +81,12 @@ export class MeetingController {
     return this.meetingService.getInterviewByScheduleId(scheduleId);
   }
 
-  @Post('/interview/:interviewId/invite')
+  @Post('/schedule/:scheduleId/invite')
   @HttpCode(HttpStatus.OK)
   async sendInvitationToCandidate(
-    @Param('interviewId') interviewId: string
+    @Param('scheduleId') scheduleId: string
   ) {
-    return this.meetingService.sendInvitionToCandidate(interviewId)
+    return this.meetingService.sendInvitionToCandidate(scheduleId)
   }
 
   // tmp solution

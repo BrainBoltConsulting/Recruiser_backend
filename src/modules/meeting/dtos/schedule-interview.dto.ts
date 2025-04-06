@@ -5,8 +5,4 @@ export class ScheduleInterviewDto {
     @ApiProperty()
     @IsString()
     candidateId: string;
-
-    @ApiProperty()
-    @IsDateString()
-    scheduledDateTime: Date;
 }

@@ -5,7 +5,7 @@ import { IsEnum, IsString } from 'class-validator';
 export class UpsertUserTokenDto {
   @ApiProperty()
   @IsString()
-  userId: string;
+  userId: number;
 
   @ApiProperty()
   @IsString()

@@ -118,7 +118,7 @@ export class CandidateService {
   }
 
   async getUserById(id: number) {
-    const entity = await this.candidateRepository.findByUserId(id);
+    const entity = await this.candidateRepository.findByCandidateId(id);
     
     //return entity.toDto();
     return entity;
@@ -133,7 +133,7 @@ export class CandidateService {
       });
     }
 
-    return (await this.candidateRepository.findByUserId(id));
+    return (await this.candidateRepository.findByCandidateId(id));
 
     // return (await this.candidateRepository.findById(id)).toDto({isAccess: true});
   }
@@ -183,14 +183,14 @@ export class CandidateService {
   } 
 
   async getCandidatesInterviews(candidateId: number) {
-    await this.candidateRepository.findByUserId(candidateId);
+    await this.candidateRepository.findByCandidateId(candidateId);
 
     return this.meetingService.getInterviewsOfCandidate(candidateId);
   }
 
   @Transactional()
   async deleteUser(id: number): Promise<void> {
-    await this.candidateRepository.findByUserId(id);
+    await this.candidateRepository.findByCandidateId(id);
     await this.candidateRepository.delete(id);
   }
 

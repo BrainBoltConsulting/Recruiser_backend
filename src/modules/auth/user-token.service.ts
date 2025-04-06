@@ -23,7 +23,7 @@ export class UserTokenService {
     return (await this.userTokenRepository.save(entity)).toDto();
   }
 
-  async getById(id: string): Promise<UserTokenDto> {
+  async getById(id: number): Promise<UserTokenDto> {
     const entity = await this.userTokenRepository.findByUserId(id);
     if (!entity) {
       throw new UserTokenNotFoundException();
@@ -32,7 +32,7 @@ export class UserTokenService {
     return entity.toDto();
   }
 
-  async getByUserIdAndType(userId: string, type: TokenTypeEnum) {
+  async getByUserIdAndType(userId: number, type: TokenTypeEnum) {
     try {
       const query = await this.userTokenRepository
       .createQueryBuilder('userToken')
@@ -45,7 +45,7 @@ export class UserTokenService {
     }
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: number): Promise<void> {
     await this.userTokenRepository.delete(id);
   }
   

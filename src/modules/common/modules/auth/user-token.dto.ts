@@ -3,7 +3,7 @@ import type { UserTokenEntity } from '../../../auth/user-token.entity';
 import { AbstractDto } from '../../dtos/abstract.dto';
 
 export class UserTokenDto extends AbstractDto {
-  userId: string;
+  userId: number;
 
   token: string;
 

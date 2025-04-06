@@ -57,7 +57,7 @@ export class SkillService {
     return skillEntity;
   }
 
-  async createSkillForCadidate(skillId: number, candidateId: string) {
+  async createSkillForCadidate(skillId: number, candidateId: number) {
     const skillEntity = await this.skillRepository.findById(skillId);
 
     if (!skillEntity) {

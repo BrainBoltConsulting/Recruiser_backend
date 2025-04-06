@@ -170,6 +170,6 @@ export class AuthService {
       throw new InvalidResetPasswordTokenException();
     }
 
-    await this.userTokenService.delete(userToken.id);
+    await this.userTokenService.delete(userToken.id as number);
   }
 }

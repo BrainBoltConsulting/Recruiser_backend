@@ -6,7 +6,7 @@ import { Skills } from "./Skills";
 @Entity("candidate_skills", { schema: "public" })
 export class CandidateSkills {
   @Column("bigint", { primary: true, name: "candidate_id" })
-  candidateId: string;
+  candidateId: number;
 
   @Column("integer", { primary: true, name: "skill_id" })
   skillId: number;

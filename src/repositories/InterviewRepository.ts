@@ -31,7 +31,7 @@ export class InterviewRepository extends Repository<Interview> {
     return entity;
   }
 
-  async findByCandidateId(candidateId: string): Promise<Interview | null> {
+  async findByCandidateId(candidateId: number): Promise<Interview | null> {
       return this.createQueryBuilder('interview')
         .where('interview.candidateId = :candidateId', { candidateId })
         .getOne();

@@ -13,7 +13,7 @@ export class CandidateSkillsRepository extends Repository<CandidateSkills> {
       .getOne();
   }
 
-  async findByCandidateIdAndSkill(candidateId: string, skillId: number) {
+  async findByCandidateIdAndSkill(candidateId: number, skillId: number) {
     return this.createQueryBuilder('candidateskills')
       .where('candidateskills.candidateId = :candidateId', { candidateId })
       .andWhere('candidateskills.skillId = :skillId', { skillId })

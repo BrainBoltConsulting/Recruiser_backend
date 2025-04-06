@@ -40,7 +40,7 @@ export class Schedule {
   updatedAt: Date | null;
 
   @Column({ name: 'candidate_id', type: 'bigint' })
-  candidateId: bigint;
+  candidateId: number;
 
   @ManyToOne(() => Candidate, (candidate) => candidate.schedules)
   @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])

@@ -19,7 +19,7 @@ export class CandidateRepository extends Repository<Candidate> {
       .getOne();
   }
 
-  async findByUserId(id: number): Promise<Candidate | null> {
+  async findByCandidateId(id: number): Promise<Candidate | null> {
     return this.createQueryBuilder('candidate')
       .where('candidate.candidateId = :id', { id })
       .getOne();

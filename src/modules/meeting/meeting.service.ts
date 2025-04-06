@@ -10,9 +10,10 @@ import { CandidateRepository } from './../../repositories/CandidateRepository';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { UserDto } from './../common/modules/user/user.dto';
 import { PollyService } from '../../shared/services/aws-polly.service';
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { QuestionService } from '../question/question.service';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
+import { Transactional } from 'typeorm-transactional';
 
 @Injectable()
 export class MeetingService {
@@ -47,12 +48,35 @@ export class MeetingService {
     const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting()
     const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`
     const scheduleEntity = await this.scheduleRepository.save(this.scheduleRepository.create({
-      scheduledDatetime: scheduleInterviewDto.scheduledDateTime,
+      scheduledDatetime: new Date(),
       candidate: candidateEntity,
       meetingLink: fullPath
     }));
 
     return scheduleEntity;
+  }
+
+  @Transactional()
+  async startInterview(scheduleId: string) {
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(scheduleEntity.candidateId);
+
+    console.log(interviewEntityByCandidateId)
+   
+    if (interviewEntityByCandidateId && scheduleEntity.attendedDatetime) {
+      throw new BadRequestException('Interview has already happened, can not move forward')
+    };
+
+    const interviewDate = new Date();
+
+    const interviewEntity = await this.interviewRepository.save(this.interviewRepository.create({
+      interviewDate,
+      candidateId: scheduleEntity.candidateId,
+    })); 
+
+    await this.scheduleRepository.update(scheduleId, { attendedDatetime: interviewDate });
+
+    return interviewEntity;
   }
 
   async finishInterview(file: Express.Multer.File) {
@@ -77,8 +101,8 @@ export class MeetingService {
     return evaluationEntity;
   }
 
-  async sendInvitionToCandidate(interviewId: string) {
-    const scheduleEntity = await this.scheduleRepository.findById(interviewId);
+  async sendInvitionToCandidate(scheduleId: string) {
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     
     await this.mailService.send({
       to: scheduleEntity.candidate.email,

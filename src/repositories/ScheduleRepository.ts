@@ -28,7 +28,7 @@ export class ScheduleRepository extends Repository<Schedule> {
       .getOne();
 
     if (!entity) {
-      throw new NotFoundException(`${Schedule} not found with id: ${id}`);
+      throw new NotFoundException(`Schedule not found with id: ${id}`);
     }
 
     return entity;
