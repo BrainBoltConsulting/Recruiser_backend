@@ -39,6 +39,7 @@ export class MeetingController {
   ) {
     return this.meetingService.getMeetingByMeetingLink(meetingPostfix)
   }
+  
 
   @Post('/schedule')
   @HttpCode(HttpStatus.OK)
@@ -91,7 +92,7 @@ export class MeetingController {
 
   // tmp solution
   @AuthWithoutRequiredUser()
-  @Post('/interview/:interviewId/questions/:questionId/recording')
+  @Post('/schedule/:schedule/questions/:questionId/recording')
   @UseInterceptors(FileInterceptor('videoFile'))
   @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
   @ApiFile([{ name: 'videoFile' }], {
@@ -101,11 +102,11 @@ export class MeetingController {
   })
   @HttpCode(HttpStatus.OK)
   async saveRecordingForQuestionByMeeting(
-    @Param('interviewId') interviewId: string, 
+    @Param('scheduleId') scheduleId: string, 
     @Param('questionId') questionId: string, 
     @UploadedFile() file: Express.Multer.File,
     @AuthUser() user: Candidate
   ) {
-    return this.meetingService.saveRecordingForQuestionByMeeting(file, interviewId, questionId, user)
+    return this.meetingService.saveRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
   }
 }
