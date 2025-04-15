@@ -92,7 +92,7 @@ export class MeetingController {
 
   // tmp solution
   @AuthWithoutRequiredUser()
-  @Post('/schedule/:schedule/questions/:questionId/recording')
+  @Post('/schedule/:scheduleId/questions/:questionId/recording')
   @UseInterceptors(FileInterceptor('videoFile'))
   @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
   @ApiFile([{ name: 'videoFile' }], {
