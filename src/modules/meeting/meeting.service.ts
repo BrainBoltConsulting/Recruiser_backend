@@ -1,3 +1,4 @@
+import { DishonestRepository } from './../../repositories/DishonestRepository';
 import { ConfigRepository } from './../../repositories/ConfigRepository';
 import { Candidate } from './../../entities/Candidate';
 import { EvaluationRepository } from './../../repositories/EvaluationRepository';
@@ -14,6 +15,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { QuestionService } from '../question/question.service';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
 import { Transactional } from 'typeorm-transactional';
+import { MessageTypeEnum } from '../../constants/message.enum';
 
 @Injectable()
 export class MeetingService {
@@ -26,6 +28,7 @@ export class MeetingService {
     private readonly scheduleRepository: ScheduleRepository,
     private readonly configRepository: ConfigRepository,
     private readonly evaluationRepository: EvaluationRepository,
+    private readonly dishonestRepository: DishonestRepository,
     private readonly mailService: MailService,
     private readonly questionService: QuestionService
   ) {}
@@ -57,7 +60,7 @@ export class MeetingService {
   }
 
   @Transactional()
-  async startInterview(scheduleId: string) {
+  async startInterview(scheduleId: string, user: Candidate) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(scheduleEntity.candidateId);
 
@@ -94,11 +97,32 @@ export class MeetingService {
     
     const evaluationEntity = await this.evaluationRepository.save(this.evaluationRepository.create({
       questionId,
-      interviewId: interviewEntityByCandidateId?.interviewId || 20,  // tmp solution
+      interviewId: interviewEntityByCandidateId?.interviewId,  // tmp solution
       videofileS3key: s3Uri,
     }));
 
     return evaluationEntity;
+  }
+
+  @Transactional()
+  async saveCheatingForQuestionByMeeting(scheduleId: string, questionId: string, candidate: Candidate) {
+    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(candidate.candidateId); // tmp solution
+    const findDishonestEntityByQUestionAndInterviewId = await this.dishonestRepository.findByInterviewIdAndQuestionId(interviewEntityByCandidateId.interviewId, questionId);
+    const switchCount = (Number(findDishonestEntityByQUestionAndInterviewId?.switchCount) || 0) + 1;
+
+    if (!findDishonestEntityByQUestionAndInterviewId) {
+      await this.dishonestRepository.save(this.dishonestRepository.create({
+        interview: interviewEntityByCandidateId,
+        interviewId: interviewEntityByCandidateId.interviewId,
+        questionId,
+        switchCount
+      }));
+
+    } else {
+      await this.dishonestRepository.save({...findDishonestEntityByQUestionAndInterviewId, switchCount})
+    }
+
+    return UtilsProvider.getMessageOverviewByType(MessageTypeEnum.TAB_SWITCH);
   }
 
   async sendInvitionToCandidate(scheduleId: string) {
@@ -120,9 +144,31 @@ export class MeetingService {
   async getInterviewByScheduleId(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const candidateSkills = scheduleEntity.candidate.candidateSkills;
-    const getQuestionsAmountEntity = await this.configRepository.getQuestionsbySkillSequence(1);
-    const questionsBySkill = await this.questionService.getQuestionsBySkill(candidateSkills[0].skillId, getQuestionsAmountEntity.configValue)
 
-    return questionsBySkill.toDtos();
+    const getQuestionsConfigAmountBySkillSequence = await this.configRepository.getQuestionsbySkillSequences();
+
+    if (!getQuestionsConfigAmountBySkillSequence || !getQuestionsConfigAmountBySkillSequence.length) {
+      throw new BadRequestException();
+    }
+
+    const questionsConfigsAmountBySkillSequenceSorted = getQuestionsConfigAmountBySkillSequence.sort((config1, config2) => config1.configName.localeCompare(config2.configName));
+    const questionConfigsAmountByCandidateSkillsAmount = questionsConfigsAmountBySkillSequenceSorted.slice(0, candidateSkills.length);
+    const difficultyLevelByPercentage = await this.configRepository.getQuestionsDifficultyLevelByPercentage();
+
+    if (!difficultyLevelByPercentage || !difficultyLevelByPercentage.length) {
+      throw new BadRequestException();
+    }
+
+    const difficultyLevelNumbersByPercentageSorted = difficultyLevelByPercentage.sort((config1, config2) => config1.configName.localeCompare(config2.configName)).map((config) => Number(config.configValue));
+    const skillAndQuestionsByCount = questionConfigsAmountByCandidateSkillsAmount.map((questionConfig, index) => ({ skillId: candidateSkills[index].skillId, count: Number(questionConfig.configValue) }))
+
+
+    const questonsList = await this.questionService.getQuestionsByDifficultyLevelAndSkills(
+      skillAndQuestionsByCount,
+      difficultyLevelNumbersByPercentageSorted
+    );
+    const questionsListOrdered = this.questionService.sortQuestionsBySkillAndLevel(questonsList, candidateSkills.map((candidateSkills) => candidateSkills.skillId));
+
+    return questionsListOrdered.toDtos();
   }
 }

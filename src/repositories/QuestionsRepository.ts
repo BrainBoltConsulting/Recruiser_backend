@@ -31,4 +31,19 @@ export class QuestionsRepository extends Repository<Questions> {
 
     return entity;
   }
+
+  async findByIds(ids: string[]): Promise<Questions[]> {
+    return this.createQueryBuilder('questions')
+      .where("questions.questionId IN (:...ids)", { ids })
+      .getMany();
+  }
+
+  async getQuestionsByDifficultyLevelAndBySkillsId(skillId: number, difficultyLevel: number, count: number) {
+    return this.createQueryBuilder("questions")
+      .where("questions.difficulty_level = :level", { level: difficultyLevel })
+      .andWhere("questions.primarySkillId = :skillId", { skillId })
+      .orderBy("RANDOM()")
+      .limit(count)
+      .getMany();
+  };
 }

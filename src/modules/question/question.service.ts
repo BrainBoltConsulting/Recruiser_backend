@@ -8,6 +8,7 @@ import { GetQuestionsDto } from './dtos/get-questions.dto';
 import { AnswersRepository } from '../../repositories/AnswersRepository';
 import { Transactional } from 'typeorm-transactional';
 import { SkillService } from '../skill/skill.service';
+import { Questions } from '../../entities/Questions';
 
 @Injectable()
 export class QuestionService {
@@ -20,7 +21,6 @@ export class QuestionService {
   ) {}
 
   async getAllQuestions(getQuestionsDto: GetQuestionsDto) {
-    console.log(await this.s3Service.generatePreSignedUrl('question_images/1.png'))
     return (await this.questionsRepository.getAllSorted()).toDtos();
   }
 
@@ -32,7 +32,6 @@ export class QuestionService {
 
   @Transactional()
   async createNewQuestion(createQuestionDto: CreateQuestionDto) {
-    console.log(createQuestionDto);
     const primarySkillEntity = await this.skillService.getSkillById(createQuestionDto.primarySkillId);
 
     const questionEntityToSave = this.questionsRepository.create({
@@ -64,6 +63,83 @@ export class QuestionService {
     const questionEntities = await this.questionsRepository.findByPrimarySkillId(skillId, questionsTakeNumber);
 
     return questionEntities;
+  }
+  
+
+  async getQuestionsByDifficultyLevelAndSkills(
+    skills: { skillId: number, count: number }[],
+    percentages: number[]
+  ) {
+    const allSelected: Questions[] = [];
+  
+    for (const { skillId, count } of skills) {
+      const level1Count = Math.floor(count * (percentages[0] / 100));
+      const level2Count = Math.floor(count * (percentages[1] / 100));
+      const level3Count = count - level1Count - level2Count; 
+  
+      const level1Qs = await this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 1, level1Count);
+      const level2Qs = await this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 2, level2Count);
+      const level3Qs = await this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 3, level3Count);
+  
+      allSelected.push(...level1Qs, ...level2Qs, ...level3Qs);
+    }
+  
+    const missingParentIds = allSelected
+      .filter(question => question.questionLevel)
+      .map(question => question.questionLevel.toString())
+      .filter((id, i, arr) => !allSelected.find(question => question.questionId === id) && arr.indexOf(id) === i);
+  
+    const parentQuestions = missingParentIds.length
+      ? await this.questionsRepository.findByIds(missingParentIds)
+      : [];
+  
+    return [...allSelected, ...parentQuestions];
+  };
+
+  sortQuestionsBySkillAndLevel(
+    questions: Questions[],
+    orderedSkillIds: number[]
+  ): Questions[] {
+    const questionMap = new Map<number, Questions>();
+    const childMap = new Map<number, Questions[]>();
+  
+    questions.forEach((q) => {
+      questionMap.set(Number(q.questionId), q);
+      if (q.questionLevel) {
+        if (!childMap.has(q.questionLevel)) {
+          childMap.set(q.questionLevel, []);
+        }
+        childMap.get(q.questionLevel)!.push(q);
+      }
+    });
+  
+    const skillGroups = new Map<number, Questions[]>();
+  
+    questions.forEach((q) => {
+      if (!skillGroups.has(q.primarySkillId)) {
+        skillGroups.set(q.primarySkillId, []);
+      }
+
+      if (!q.questionLevel) {
+        skillGroups.get(q.primarySkillId)!.push(q);
+      }
+    });
+  
+    const sortedResult: Questions[] = [];
+  
+    for (const skillId of orderedSkillIds) {
+      const skillQuestions = skillGroups.get(skillId) || [];
+  
+      for (const parent of skillQuestions) {
+        sortedResult.push(parent);
+  
+        const children = childMap.get(Number(parent.questionId)) || [];
+        children.sort((a, b) => Number(a.questionId) - Number(b.questionId));
+        sortedResult.push(...children);
+      }
+    }
+  
+    return sortedResult;
   }
 
 }
