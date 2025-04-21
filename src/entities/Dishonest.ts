@@ -26,6 +26,20 @@ export class Dishonest {
   @Column("boolean", { name: "is_deleted", default: () => "false" })
   isDeleted: boolean;
 
+  @Column({ nullable: true, name: 'interview_id' })
+  interviewId: number;
+
+  @Column({ nullable: true, name: 'question_id' })
+  questionId: string;
+
+  @Column("numeric", {
+    name: "switch_count",
+    nullable: true,
+    precision: 3,
+    scale: 0,
+  })
+  switchCount: number | null;
+
   @Column("timestamp without time zone", {
     name: "created_at",
     nullable: true,

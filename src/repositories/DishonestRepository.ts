@@ -30,4 +30,11 @@ export class DishonestRepository extends Repository<Dishonest> {
 
     return entity;
   }
+
+  async findByInterviewIdAndQuestionId(interviewId: number, questionId: string): Promise<Dishonest | null> {
+    return this.createQueryBuilder('dishonest')
+      .where('dishonest.interviewId = :interviewId', { interviewId})
+      .andWhere('dishonest.questionId = :questionId', { questionId })
+      .getOne()
+  } 
 }

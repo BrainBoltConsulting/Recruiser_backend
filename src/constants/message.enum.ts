@@ -13,7 +13,8 @@ export enum MessageTypeEnum {
   COMPANY_DOES_NOT_HAVE_USERS = 'COMPANY_DOES_NOT_HAVE_USERS',
   USER_IS_NOT_FOUND = 'USER_IS_NOT_FOUND',
   USER_NOT_FOUND_IN_COMPANY = 'USER_NOT_FOUND_IN_COMPANY',
-  CATEGORY_IS_NOT_FOUND = 'CATEGORY_IS_NOT_FOUND'
+  CATEGORY_IS_NOT_FOUND = 'CATEGORY_IS_NOT_FOUND',
+  TAB_SWITCH = 'TAB_SWITCH'
 }
 
 export const messages = {
@@ -31,5 +32,6 @@ export const messages = {
   COMPANY_DATA_ALREADY_EXISTS: "A company with the provided phone number or name already exists",
   COMPANY_DOES_NOT_HAVE_USERS: "No users found for this company",
   USER_IS_NOT_FOUND: "User is not found",
-  CATEGORY_IS_NOT_FOUND: "Category is not found"
+  CATEGORY_IS_NOT_FOUND: "Category is not found",
+  TAB_SWITCH: "User switched tabs or minimized"
 }

@@ -13,10 +13,16 @@ export class ConfigRepository extends Repository<Config> {
       .getOne();
   }
 
-  async getQuestionsbySkillSequence(skillSequenceNumber: number): Promise<Config | null> {
+  async getQuestionsbySkillSequences(): Promise<Config[] | null> {
     return this.createQueryBuilder('config')
-      .where('config.configName = :configName', { configName: `skill_sequence${skillSequenceNumber}` })
-      .getOne();
+      .where("config.config_name LIKE :pattern", { pattern: 'skill_sequence%' })
+      .getMany();      
+  }
+
+  async getQuestionsDifficultyLevelByPercentage(): Promise<Config[] | null> {
+    return this.createQueryBuilder('config')
+      .where("config.config_name LIKE :pattern", { pattern: 'difficulty_level%' })
+      .getMany();      
   }
 
   async getAllSorted(): Promise<Config[]> {

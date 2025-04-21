@@ -49,12 +49,15 @@ export class MeetingController {
     return this.meetingService.scheduleInterview(scheduleInterviewDto)
   }
 
+  // tmp solution
+  @AuthWithoutRequiredUser()
   @Post('/schedule/:id/start')
   @HttpCode(HttpStatus.OK)
   async startInterview(
     @Param('id') id: string, 
+    @AuthUser() user: Candidate
   ) {
-    return this.meetingService.startInterview(id)
+    return this.meetingService.startInterview(id, user)
   }
 
   @Post('/schedule/:id/finish')
@@ -70,7 +73,6 @@ export class MeetingController {
     @Param('id') id: string, 
     @UploadedFile() file: Express.Multer.File
   ) {
-    console.log(file)
     return this.meetingService.finishInterview(file)
   }
 
@@ -109,4 +111,16 @@ export class MeetingController {
   ) {
     return this.meetingService.saveRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
   }
+
+    // tmp solution
+    @AuthWithoutRequiredUser()
+    @Post('/schedule/:scheduleId/questions/:questionId/cheat-detected')
+    @HttpCode(HttpStatus.OK)
+    async saveCheatingForQuestionByMeeting(
+      @Param('scheduleId') scheduleId: string, 
+      @Param('questionId') questionId: string, 
+      @AuthUser() user: Candidate
+    ) {
+      return this.meetingService.saveCheatingForQuestionByMeeting(scheduleId, questionId, user)
+    }
 }
