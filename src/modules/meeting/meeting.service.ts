@@ -139,6 +139,7 @@ export class MeetingService {
     return UtilsProvider.getMessageOverviewByType(MessageTypeEnum.TAB_SWITCH);
   }
 
+  @Transactional()
   async sendInvitionToCandidate(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     
@@ -146,11 +147,27 @@ export class MeetingService {
       to: scheduleEntity.candidate.email,
       subject: "You're Invited! Join Your Meeting on Canint",
       html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, scheduleEntity.candidate.email, scheduleEntity.meetingLink),
-    });  
+    }); 
+
+    await this.scheduleRepository.update(scheduleId, { scheduledDatetime: new Date() })
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {
     const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`${this.configService.frontendUrl}/meeting/${meetingPostfix}`);
+
+
+    const now = new Date();
+    const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
+    const meetingLinkExpiryConfig = await this.configRepository.getMeetingLinkExpiryValue();
+
+    if (!meetingLinkExpiryConfig) {
+      throw new BadRequestException('Meeting link expiry config is not found')
+    }
+
+    const hoursDifference = (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
+    if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
+      throw new BadRequestException(`Scheduled time has already passed by more than ${Number(meetingLinkExpiryConfig.configValue)} hours`);
+    }
 
     return scheduleEntity;
   }
