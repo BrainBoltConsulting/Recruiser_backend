@@ -71,11 +71,16 @@ export class MeetingService {
     }
   
     const now = new Date();
-    const scheduledDate = new Date(scheduleEntity.scheduledDatetime); // assuming the scheduled date field is called 'scheduledDatetime'
-  
+    const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
+    const meetingLinkExpiryConfig = await this.configRepository.getMeetingLinkExpiryValue();
+
+    if (!meetingLinkExpiryConfig) {
+      throw new BadRequestException('Meeting link expiry config is not found')
+    }
+
     const hoursDifference = (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
-    if (hoursDifference > 48) {
-      throw new BadRequestException('Scheduled time has already passed by more than 48 hours');
+    if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
+      throw new BadRequestException(`Scheduled time has already passed by more than ${Number(meetingLinkExpiryConfig.configValue)} hours`);
     }
   
     const interviewEntity = await this.interviewRepository.save(

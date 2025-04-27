@@ -42,4 +42,10 @@ export class ConfigRepository extends Repository<Config> {
 
     return entity;
   }
+
+  async getMeetingLinkExpiryValue(): Promise<Config> {
+    return this.createQueryBuilder('config')
+      .where('config.configName = :configName', { configName: "meeting_link_expiry" })
+      .getOne();
+  }
 }
