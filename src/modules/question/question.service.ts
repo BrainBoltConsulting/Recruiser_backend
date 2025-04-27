@@ -77,11 +77,14 @@ export class QuestionService {
       const level2Count = Math.floor(count * (percentages[1] / 100));
       const level3Count = count - level1Count - level2Count; 
   
-      const level1Qs = await this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 1, level1Count);
-      const level2Qs = await this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 2, level2Count);
-      const level3Qs = await this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 3, level3Count);
+
+      const questionsBySkillId = await Promise.all([
+        this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 1, level1Count),
+        this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 2, level2Count),
+        this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 3, level3Count)
+      ])
   
-      allSelected.push(...level1Qs, ...level2Qs, ...level3Qs);
+      allSelected.push(...questionsBySkillId.flat());
     }
   
     const missingParentIds = allSelected
@@ -93,7 +96,9 @@ export class QuestionService {
       ? await this.questionsRepository.findByIds(missingParentIds)
       : [];
   
-    return [...allSelected, ...parentQuestions];
+    const allQuestionsWithParents = [...allSelected, ...parentQuestions];
+
+    return allQuestionsWithParents;
   };
 
   sortQuestionsBySkillAndLevel(

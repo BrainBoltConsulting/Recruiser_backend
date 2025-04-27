@@ -63,24 +63,33 @@ export class MeetingService {
   async startInterview(scheduleId: string, user: Candidate) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(scheduleEntity.candidateId);
-
-    console.log(interviewEntityByCandidateId)
-   
+  
+    console.log(interviewEntityByCandidateId);
+  
     if (interviewEntityByCandidateId && scheduleEntity.attendedDatetime) {
-      throw new BadRequestException('Interview has already happened, can not move forward')
-    };
-
-    const interviewDate = new Date();
-
-    const interviewEntity = await this.interviewRepository.save(this.interviewRepository.create({
-      interviewDate,
-      candidateId: scheduleEntity.candidateId,
-    })); 
-
-    await this.scheduleRepository.update(scheduleId, { attendedDatetime: interviewDate });
-
+      throw new BadRequestException('Interview has already happened, can not move forward');
+    }
+  
+    const now = new Date();
+    const scheduledDate = new Date(scheduleEntity.scheduledDatetime); // assuming the scheduled date field is called 'scheduledDatetime'
+  
+    const hoursDifference = (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
+    if (hoursDifference > 48) {
+      throw new BadRequestException('Scheduled time has already passed by more than 48 hours');
+    }
+  
+    const interviewEntity = await this.interviewRepository.save(
+      this.interviewRepository.create({
+        interviewDate: now,
+        candidateId: scheduleEntity.candidateId,
+      })
+    );
+  
+    await this.scheduleRepository.update(scheduleId, { attendedDatetime: now });
+  
     return interviewEntity;
   }
+  
 
   async finishInterview(file: Express.Multer.File) {
     const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles');
