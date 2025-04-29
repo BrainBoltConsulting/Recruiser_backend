@@ -39,6 +39,10 @@ export class QuestionsRepository extends Repository<Questions> {
   }
 
   async getQuestionsByDifficultyLevelAndBySkillsId(skillId: number, difficultyLevel: number, count: number) {
+    if (count === 0) {
+      return []; // because of typeorm issue
+    }
+
     return this.createQueryBuilder("questions")
       .where("questions.difficulty_level = :level", { level: difficultyLevel })
       .andWhere("questions.primarySkillId = :skillId", { skillId })

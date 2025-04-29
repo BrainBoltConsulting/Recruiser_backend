@@ -174,8 +174,8 @@ export class MeetingService {
 
   async getInterviewByScheduleId(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
-    const candidateSkills = scheduleEntity.candidate.candidateSkills;
-
+    const jobSkills = scheduleEntity.job.jobSkills;
+    const jobSkillsSorted = jobSkills.sort((jobSkill1, jobSkill2) => Number(jobSkill1.skillSequence) - Number(jobSkill2.skillSequence))
     const getQuestionsConfigAmountBySkillSequence = await this.configRepository.getQuestionsbySkillSequences();
 
     if (!getQuestionsConfigAmountBySkillSequence || !getQuestionsConfigAmountBySkillSequence.length) {
@@ -183,7 +183,7 @@ export class MeetingService {
     }
 
     const questionsConfigsAmountBySkillSequenceSorted = getQuestionsConfigAmountBySkillSequence.sort((config1, config2) => config1.configName.localeCompare(config2.configName));
-    const questionConfigsAmountByCandidateSkillsAmount = questionsConfigsAmountBySkillSequenceSorted.slice(0, candidateSkills.length);
+    const questionConfigsAmountByCandidateSkillsAmount = questionsConfigsAmountBySkillSequenceSorted.slice(0, jobSkillsSorted.length);
     const difficultyLevelByPercentage = await this.configRepository.getQuestionsDifficultyLevelByPercentage();
 
     if (!difficultyLevelByPercentage || !difficultyLevelByPercentage.length) {
@@ -191,14 +191,14 @@ export class MeetingService {
     }
 
     const difficultyLevelNumbersByPercentageSorted = difficultyLevelByPercentage.sort((config1, config2) => config1.configName.localeCompare(config2.configName)).map((config) => Number(config.configValue));
-    const skillAndQuestionsByCount = questionConfigsAmountByCandidateSkillsAmount.map((questionConfig, index) => ({ skillId: candidateSkills[index].skillId, count: Number(questionConfig.configValue) }))
+    const skillAndQuestionsByCount = questionConfigsAmountByCandidateSkillsAmount.map((questionConfig, index) => ({ skillId: jobSkillsSorted[index].skillId, count: Number(questionConfig.configValue) }))
 
 
     const questonsList = await this.questionService.getQuestionsByDifficultyLevelAndSkills(
       skillAndQuestionsByCount,
       difficultyLevelNumbersByPercentageSorted
     );
-    const questionsListOrdered = this.questionService.sortQuestionsBySkillAndLevel(questonsList, candidateSkills.map((candidateSkills) => candidateSkills.skillId));
+    const questionsListOrdered = this.questionService.sortQuestionsBySkillAndLevel(questonsList, jobSkillsSorted.map((jobSkill) => Number(jobSkill.skillId)));
 
     return questionsListOrdered.toDtos();
   }

@@ -15,6 +15,9 @@ export class JobSkills {
   @Column("boolean", { name: "is_mandatory", default: () => "false" })
   isMandatory: boolean;
 
+  @Column("integer", { primary: true, name: "skill_id" })
+  skillId: number;
+
   @Column("timestamp without time zone", {
     name: "created_on",
     default: () => "CURRENT_TIMESTAMP",

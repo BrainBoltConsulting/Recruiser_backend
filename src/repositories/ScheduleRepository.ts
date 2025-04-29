@@ -23,6 +23,8 @@ export class ScheduleRepository extends Repository<Schedule> {
     const entity = await this.createQueryBuilder('schedule')
       .where('schedule.scheduleId = :id', { id })
       .leftJoinAndSelect('schedule.candidate', 'candidate')
+      .leftJoinAndSelect('schedule.job', 'job')
+      .leftJoinAndSelect('job.jobSkills', 'jobSkills')
       .leftJoinAndSelect('candidate.candidateSkills', 'candidateSkills')
       .leftJoinAndSelect('candidateSkills.skill', 'skill')
       .getOne();

@@ -77,13 +77,12 @@ export class QuestionService {
       const level2Count = Math.floor(count * (percentages[1] / 100));
       const level3Count = count - level1Count - level2Count; 
   
-
       const questionsBySkillId = await Promise.all([
         this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 1, level1Count),
         this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 2, level2Count),
         this.questionsRepository.getQuestionsByDifficultyLevelAndBySkillsId(skillId, 3, level3Count)
       ])
-  
+
       allSelected.push(...questionsBySkillId.flat());
     }
   
@@ -107,7 +106,6 @@ export class QuestionService {
   ): Questions[] {
     const questionMap = new Map<number, Questions>();
     const childMap = new Map<number, Questions[]>();
-  
     questions.forEach((q) => {
       questionMap.set(Number(q.questionId), q);
       if (q.questionLevel) {
@@ -129,12 +127,12 @@ export class QuestionService {
         skillGroups.get(q.primarySkillId)!.push(q);
       }
     });
-  
+
     const sortedResult: Questions[] = [];
-  
+
     for (const skillId of orderedSkillIds) {
       const skillQuestions = skillGroups.get(skillId) || [];
-  
+
       for (const parent of skillQuestions) {
         sortedResult.push(parent);
   
