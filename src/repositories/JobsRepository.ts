@@ -21,7 +21,7 @@ export class JobsRepository extends Repository<Jobs> {
 
   async findById(id: string): Promise<Jobs> {
     const entity = await this.createQueryBuilder('jobs')
-      .where('jobs.id = :id', { id })
+      .where('jobs.jobId = :id', { id })
       .getOne();
 
     if (!entity) {

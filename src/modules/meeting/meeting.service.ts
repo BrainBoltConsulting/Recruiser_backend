@@ -1,3 +1,4 @@
+import { JobsRepository } from './../../repositories/JobsRepository';
 import { DishonestRepository } from './../../repositories/DishonestRepository';
 import { ConfigRepository } from './../../repositories/ConfigRepository';
 import { Candidate } from './../../entities/Candidate';
@@ -27,6 +28,7 @@ export class MeetingService {
     private readonly interviewRepository: InterviewRepository,
     private readonly scheduleRepository: ScheduleRepository,
     private readonly configRepository: ConfigRepository,
+    private readonly jobsRepository: JobsRepository,
     private readonly evaluationRepository: EvaluationRepository,
     private readonly dishonestRepository: DishonestRepository,
     private readonly mailService: MailService,
@@ -47,13 +49,22 @@ export class MeetingService {
 
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
     const candidateEntity = await this.candidateRepository.findById(scheduleInterviewDto.candidateId);
-    
+    const jobEntity = await this.jobsRepository.findById(scheduleInterviewDto.jobId);
+
+    const findScheduleEntityWithTheSameCandidateAndJob = await this.scheduleRepository.findByCandidateAndJobId(scheduleInterviewDto.candidateId, scheduleInterviewDto.jobId);
+
+    if (findScheduleEntityWithTheSameCandidateAndJob) {
+      throw new BadRequestException('By candidate id and job id meeting already exists')
+    }
+
     const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting()
     const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`
     const scheduleEntity = await this.scheduleRepository.save(this.scheduleRepository.create({
       scheduledDatetime: new Date(),
       candidate: candidateEntity,
-      meetingLink: fullPath
+      meetingLink: fullPath,
+      jobId: scheduleInterviewDto.jobId,
+      job: jobEntity
     }));
 
     return scheduleEntity;

@@ -24,6 +24,9 @@ export class Schedule {
   @Column("text", { name: "meeting_link", nullable: true })
   meetingLink: string | null;
 
+  @Column({ nullable: true, name: 'job_id' })
+  jobId: string;
+
   @Column("timestamp without time zone", {
     name: "attended_datetime",
     nullable: true,

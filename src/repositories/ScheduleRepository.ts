@@ -42,6 +42,13 @@ export class ScheduleRepository extends Repository<Schedule> {
       .getMany();
   }
 
+  async findByCandidateAndJobId(candidateId: string, jobId: string): Promise<Schedule | null> {
+    return this.createQueryBuilder('schedule')
+      .where('schedule.candidateId = :candidateId', { candidateId })
+      .andWhere('schedule.jobId = :jobId', { jobId })
+      .getOne();
+  }
+
   async findByMeetingLink(meetingLink: string): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
       .where('schedule.meetingLink = :meetingLink', { meetingLink })
