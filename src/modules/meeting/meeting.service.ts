@@ -12,7 +12,7 @@ import { CandidateRepository } from './../../repositories/CandidateRepository';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { UserDto } from './../common/modules/user/user.dto';
 import { PollyService } from '../../shared/services/aws-polly.service';
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { QuestionService } from '../question/question.service';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
 import { Transactional } from 'typeorm-transactional';
@@ -71,7 +71,7 @@ export class MeetingService {
   }
 
   @Transactional()
-  async startInterview(scheduleId: string, user: Candidate) {
+  async startInterview(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(scheduleEntity.candidateId);
   
@@ -114,7 +114,10 @@ export class MeetingService {
     return link;
   }
 
-  async saveRecordingForQuestionByMeeting(file: Express.Multer.File, scheduleId: string, questionId: string, candidate: Candidate) {
+  async saveRecordingForQuestionByMeeting(file: Express.Multer.File, scheduleId: string, questionId: string) {
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+    const candidate = scheduleEntity.candidate;
+
     const fileName = `SId-${scheduleId}-QId-${questionId}-CId-${candidate.candidateId}-${Date.now()}`
     const responseFromS3 = await this.s3Service.uploadFile(file, 'VideoInterviewFiles', fileName);
     const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(responseFromS3.Bucket, responseFromS3.Key);
@@ -130,7 +133,9 @@ export class MeetingService {
   }
 
   @Transactional()
-  async saveCheatingForQuestionByMeeting(scheduleId: string, questionId: string, candidate: Candidate) {
+  async saveCheatingForQuestionByMeeting(scheduleId: string, questionId: string) {
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+    const candidate = scheduleEntity.candidate;
     const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(candidate.candidateId); // tmp solution
     const findDishonestEntityByQUestionAndInterviewId = await this.dishonestRepository.findByInterviewIdAndQuestionId(interviewEntityByCandidateId.interviewId, questionId);
     const switchCount = (Number(findDishonestEntityByQUestionAndInterviewId?.switchCount) || 0) + 1;
@@ -164,8 +169,12 @@ export class MeetingService {
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {
-    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(`${this.configService.frontendUrl}/meeting/${meetingPostfix}`);
+    const meetingLink = `${this.configService.frontendUrl}/meeting/${meetingPostfix}`;
+    const scheduleEntity = await this.scheduleRepository.findByMeetingLink(meetingLink);
 
+    if (!scheduleEntity) {
+      throw new NotFoundException(`Schedule entity does not found by this link: ${meetingLink}`)
+    }
 
     const now = new Date();
     const scheduledDate = new Date(scheduleEntity.scheduledDatetime);

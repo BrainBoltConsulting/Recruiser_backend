@@ -52,6 +52,7 @@ export class ScheduleRepository extends Repository<Schedule> {
   async findByMeetingLink(meetingLink: string): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
       .where('schedule.meetingLink = :meetingLink', { meetingLink })
+      .leftJoinAndSelect('schedule.candidate', 'candidate')
       .getOne();
   }
 } 

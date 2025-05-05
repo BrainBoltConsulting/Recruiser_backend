@@ -17,29 +17,29 @@ import { UserDto } from '../common/modules/user/user.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Get('/me')
-  // tmp solution
-  @AuthWithoutRequiredUser()
-  @HttpCode(HttpStatus.OK)
-  async getMe(
-    @AuthUser() user: UserDto
-  ): Promise<AccessPayloadDto | MessageDto> {
-    return this.authService.getMe(user);
-  }
+  // @Get('/me')
+  // // tmp solution
+  // @AuthWithoutRequiredUser()
+  // @HttpCode(HttpStatus.OK)
+  // async getMe(
+  //   @AuthUser() user: UserDto
+  // ): Promise<AccessPayloadDto | MessageDto> {
+  //   return this.authService.getMe(user);
+  // }
 
-  @Post('/login')
-  @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto): Promise<AccessPayloadDto | MessageDto> {
-    return this.authService.login(loginDto);
-  }
+  // @Post('/login')
+  // @HttpCode(HttpStatus.OK)
+  // async login(@Body() loginDto: LoginDto): Promise<AccessPayloadDto | MessageDto> {
+  //   return this.authService.login(loginDto);
+  // }
 
-  @Post('/registration')
-  @HttpCode(HttpStatus.OK)
-  async registration(
-    @Body() regDto: RegistrationDto,
-  ): Promise<AccessPayloadDto | MessageDto> {
-    return (await this.authService.registrationAndLogin(regDto, Role.CANDIDATE)) as AccessPayloadDto;
-  }
+  // @Post('/registration')
+  // @HttpCode(HttpStatus.OK)
+  // async registration(
+  //   @Body() regDto: RegistrationDto,
+  // ): Promise<AccessPayloadDto | MessageDto> {
+  //   return (await this.authService.registrationAndLogin(regDto, Role.CANDIDATE)) as AccessPayloadDto;
+  // }
 
   // @Put('/refresh_token')
   // @HttpCode(HttpStatus.OK)

@@ -1,18 +1,20 @@
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
-import { AuthWithoutRequiredUserGuard } from './../../guards/auth-without-required-user.guard';
+// import { AuthWithoutRequiredUserGuard } from './../../guards/auth-without-required-user.guard';
 import { UserDto } from './../common/modules/user/user.dto';
 import { AuthUser } from './../../decorators/auth.decorator';
-import { Questions } from '../../entities/Questions';
-import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res, Body, Delete, Param, Header, UseInterceptors, UploadedFile, UseGuards, Options } from '@nestjs/common';
+// import { Questions } from '../../entities/Questions';
+import { Controller, Get, HttpCode, HttpStatus, Post, Res, Body, Param, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { MeetingService } from './meeting.service';
 import { Response } from 'express';
-import { Auth, AuthWithoutRequiredUser } from '../../decorators/http.decorator';
+import { Auth, 
+ // AuthWithoutRequiredUser 
+} from '../../decorators/http.decorator';
 import { Role } from '../../constants/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiFile } from '../../decorators/swagger.decorator';
 import { FileSizeGuard } from '../../guards/file-size.guard';
-import { Candidate } from '../../entities/Candidate';
+// import { Candidate } from '../../entities/Candidate';
 
 
 @Controller('meetings')
@@ -50,14 +52,16 @@ export class MeetingController {
   }
 
   // tmp solution
-  @AuthWithoutRequiredUser()
+  // @AuthWithoutRequiredUser()
   @Post('/schedule/:id/start')
   @HttpCode(HttpStatus.OK)
   async startInterview(
     @Param('id') id: string, 
-    @AuthUser() user: Candidate
+    // @AuthUser() user: Candidate
   ) {
-    return this.meetingService.startInterview(id, user)
+    // tmp solution
+    // return this.meetingService.startInterview(id, user)
+    return this.meetingService.startInterview(id)
   }
 
   @Post('/schedule/:id/finish')
@@ -93,7 +97,7 @@ export class MeetingController {
   }
 
   // tmp solution
-  @AuthWithoutRequiredUser()
+  // @AuthWithoutRequiredUser()
   @Post('/schedule/:scheduleId/questions/:questionId/recording')
   @UseInterceptors(FileInterceptor('videoFile'))
   @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
@@ -107,20 +111,26 @@ export class MeetingController {
     @Param('scheduleId') scheduleId: string, 
     @Param('questionId') questionId: string, 
     @UploadedFile() file: Express.Multer.File,
-    @AuthUser() user: Candidate
+    // @AuthUser() user: Candidate
   ) {
-    return this.meetingService.saveRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
+    // tmp solution
+    // return this.meetingService.saveRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
+    return this.meetingService.saveRecordingForQuestionByMeeting(file, scheduleId, questionId)
+
   }
 
     // tmp solution
-    @AuthWithoutRequiredUser()
+    // @AuthWithoutRequiredUser()
     @Post('/schedule/:scheduleId/questions/:questionId/cheat-detected')
     @HttpCode(HttpStatus.OK)
     async saveCheatingForQuestionByMeeting(
       @Param('scheduleId') scheduleId: string, 
       @Param('questionId') questionId: string, 
-      @AuthUser() user: Candidate
+      // @AuthUser() user: Candidate
     ) {
-      return this.meetingService.saveCheatingForQuestionByMeeting(scheduleId, questionId, user)
+      // tmp solution
+      // return this.meetingService.saveCheatingForQuestionByMeeting(scheduleId, questionId, user)
+      return this.meetingService.saveCheatingForQuestionByMeeting(scheduleId, questionId)
+
     }
 }
