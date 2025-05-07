@@ -57,18 +57,17 @@ export class MeetingService {
       throw new BadRequestException('By candidate id and job id meeting already exists')
     }
 
-    const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting()
-    const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`
     const scheduleEntity = await this.scheduleRepository.save(this.scheduleRepository.create({
       scheduledDatetime: new Date(),
       candidate: candidateEntity,
-      meetingLink: fullPath,
       jobId: scheduleInterviewDto.jobId,
       job: jobEntity
     }));
 
     return scheduleEntity;
   }
+
+
 
   @Transactional()
   async startInterview(scheduleId: string) {
@@ -158,14 +157,14 @@ export class MeetingService {
   @Transactional()
   async sendInvitionToCandidate(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
-    
+    const newMeetingLink = this.generateNewMeetingLink();
+
+    await this.scheduleRepository.update(scheduleEntity.scheduleId, { meetingLink: newMeetingLink, scheduledDatetime: new Date() });
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
       subject: "You're Invited! Join Your Meeting on Canint",
-      html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, scheduleEntity.candidate.email, scheduleEntity.meetingLink),
+      html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, scheduleEntity.candidate.email, newMeetingLink),
     }); 
-
-    await this.scheduleRepository.update(scheduleId, { scheduledDatetime: new Date() })
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {
@@ -221,5 +220,12 @@ export class MeetingService {
     const questionsListOrdered = this.questionService.sortQuestionsBySkillAndLevel(questonsList, jobSkillsSorted.map((jobSkill) => Number(jobSkill.skillId)));
 
     return questionsListOrdered.toDtos();
+  }
+
+  generateNewMeetingLink() {
+    const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting();
+    const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`;
+
+    return fullPath;
   }
 }
