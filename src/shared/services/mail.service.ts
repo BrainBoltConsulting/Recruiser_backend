@@ -97,36 +97,61 @@ export class MailService {
         </head>
         <body>
             <div class="email-container">
-                <!-- Header Section -->
                 <div class="header">
                 <h1>Welcome to Canint!</h1>
                 <p>Your trusted platform for seamless video interviews</p>
                 </div>
-
-                <!-- Content Section -->
+  
                 <div class="content">
                 <h2>Hi ${firstName},</h2>
                 <p>
                     You’ve been invited to join a meeting on <strong>Canint</strong>. This is a great opportunity to connect and communicate smoothly using our platform. Please find the meeting details below:
                 </p>
-
+  
                 <p><strong>Meeting Title:</strong> ${primarySkill} interview</p>
-
+  
+                <h3>Read carefully before taking your Interview:</h3>
+                <p><strong>Duration</strong></p>
+                <ul>
+                  <li>Your interview will take about 20 mins</li>
+                  <li>Make sure that your camera and microphone is on</li>
+                  <li>Make sure you are in a well lit and a quiet area</li>
+                </ul>
+  
+                <p><strong>Technical Requirements</strong></p>
+                <ul>
+                  <li>Close all other applications and browser tabs immediately</li>
+                  <li>Keep only the interview window open during the entire session</li>
+                </ul>
+  
+                <p><strong>Interview Policy</strong></p>
+                <ul>
+                  <li>You have <strong>ONE opportunity</strong> to complete this technical assessment</li>
+                  <li>This is your only attempt, so ensure you're in a quiet environment and fully prepared</li>
+                  <li>Once started, the interview cannot be paused or restarted</li>
+                </ul>
+  
+                <p><strong>Responding to Questions</strong></p>
+                <ul>
+                  <li>Begin your answers <strong>only when you see "I am listening..." displayed</strong> at the top of your screen. This indicator is your signal to start speaking</li>
+                  <li>Wait for this prompt after each question before providing your response</li>
+                  <li>You cannot go to previous question by pressing back button.</li>
+                  <li>You can finish your interview anytime by clicking the Finish Interview button</li>
+                </ul>
+  
                 <p>
                     To join the meeting, simply click the button below:
                 </p>
-
-                <!-- Call-to-Action Button -->
+  
                 <p style="text-align: center;">
                     <a href=${meetingLink} class="cta-button">Join the Meeting</a>
                 </p>
-
+  
                 <p>
                     Please ensure you check your audio and video settings before the meeting to avoid any interruptions. Our platform makes it easy to do a quick pre-check for both.
                 </p>
                 </div>
-
-                <!-- Footer Section -->
+  
                 <div class="footer">
                 <p>
                     Need assistance? Visit our <a href="[Support Page Link]">Help Center</a> or contact us at 
@@ -137,9 +162,9 @@ export class MailService {
             </div>
         </body>
     </html>
-
     `
   }
+  
 
 
 

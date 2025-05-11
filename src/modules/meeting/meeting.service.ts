@@ -1,7 +1,8 @@
+import { StartInterviewDto } from './dtos/start-interview.dto';
+import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
 import { JobsRepository } from './../../repositories/JobsRepository';
 import { DishonestRepository } from './../../repositories/DishonestRepository';
 import { ConfigRepository } from './../../repositories/ConfigRepository';
-import { Candidate } from './../../entities/Candidate';
 import { EvaluationRepository } from './../../repositories/EvaluationRepository';
 import { ApiConfigService } from './../../shared/services/api-config.service';
 import { MailService } from './../../shared/services/mail.service';
@@ -17,6 +18,7 @@ import { QuestionService } from '../question/question.service';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
 import { Transactional } from 'typeorm-transactional';
 import { MessageTypeEnum } from '../../constants/message.enum';
+import { Interview } from '../../entities/Interview';
 
 @Injectable()
 export class MeetingService {
@@ -70,13 +72,11 @@ export class MeetingService {
 
 
   @Transactional()
-  async startInterview(scheduleId: string) {
+  async startInterview(scheduleId: string, startInterviewDto: StartInterviewDto) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
-    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(scheduleEntity.candidateId);
+    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateIdExtended(scheduleEntity.candidateId);
   
-    console.log(interviewEntityByCandidateId);
-  
-    if (interviewEntityByCandidateId && scheduleEntity.attendedDatetime) {
+    if (interviewEntityByCandidateId || scheduleEntity.attendedDatetime) {
       throw new BadRequestException('Interview has already happened, can not move forward');
     }
   
@@ -97,6 +97,7 @@ export class MeetingService {
       this.interviewRepository.create({
         interviewDate: now,
         candidateId: scheduleEntity.candidateId,
+        browserName: startInterviewDto.browserName
       })
     );
   
@@ -105,12 +106,27 @@ export class MeetingService {
     return interviewEntity;
   }
   
+  @Transactional()
+  async finishInterview(scheduleId: string, isInterviewFinishedEarlierDto: IsInterviewFinishedEarlierDto) {
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+    const candidate = scheduleEntity.candidate;
+    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(candidate.candidateId);
+    const interviewEntityUpdate: Partial<Interview> = {};
+    
+    if (isInterviewFinishedEarlierDto.isInterviewFinishedEarlier) {
+      interviewEntityUpdate.isInterviewFinishedEarlier = true;
+    } 
+    
+    // const interviewUploads3Response = await this.s3Service.uploadFile(file, 'Complete_Interview');
+    // const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(interviewUploads3Response.Bucket, interviewUploads3Response.Key);
+    
+    // interviewEntityUpdate.videofileS3key = s3Uri;
 
-  async finishInterview(file: Express.Multer.File) {
-    const response = await this.s3Service.uploadFile(file, 'VideoInterviewFiles');
-    const link = response.Location;
+    if (Object.values(interviewEntityUpdate).length) {
+      await this.interviewRepository.update(interviewEntityByCandidateId.interviewId, interviewEntityUpdate)
+    }
 
-    return link;
+    return UtilsProvider.getMessageOverviewByType(MessageTypeEnum.INTERVIEW_FINISHED);
   }
 
   async saveRecordingForQuestionByMeeting(file: Express.Multer.File, scheduleId: string, questionId: string) {
@@ -158,12 +174,13 @@ export class MeetingService {
   async sendInvitionToCandidate(scheduleId: string) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const newMeetingLink = this.generateNewMeetingLink();
+    const jobTitle = scheduleEntity.job.jobTitle || '';
 
     await this.scheduleRepository.update(scheduleEntity.scheduleId, { meetingLink: newMeetingLink, scheduledDatetime: new Date() });
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
       subject: "You're Invited! Join Your Meeting on Canint",
-      html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, scheduleEntity.candidate.email, newMeetingLink),
+      html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, jobTitle, newMeetingLink),
     }); 
   }
 
@@ -184,6 +201,7 @@ export class MeetingService {
     }
 
     const hoursDifference = (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
+
     if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
       throw new BadRequestException(`Scheduled time has already passed by more than ${Number(meetingLinkExpiryConfig.configValue)} hours`);
     }

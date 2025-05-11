@@ -1,9 +1,10 @@
+import { StartInterviewDto } from './dtos/start-interview.dto';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 // import { AuthWithoutRequiredUserGuard } from './../../guards/auth-without-required-user.guard';
 import { UserDto } from './../common/modules/user/user.dto';
 import { AuthUser } from './../../decorators/auth.decorator';
 // import { Questions } from '../../entities/Questions';
-import { Controller, Get, HttpCode, HttpStatus, Post, Res, Body, Param, UseInterceptors, UploadedFile, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Res, Body, Param, UseInterceptors, UploadedFile, UseGuards, Query, Delete } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { MeetingService } from './meeting.service';
 import { Response } from 'express';
@@ -14,6 +15,7 @@ import { Role } from '../../constants/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiFile } from '../../decorators/swagger.decorator';
 import { FileSizeGuard } from '../../guards/file-size.guard';
+import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
 // import { Candidate } from '../../entities/Candidate';
 
 
@@ -56,28 +58,30 @@ export class MeetingController {
   @Post('/schedule/:id/start')
   @HttpCode(HttpStatus.OK)
   async startInterview(
-    @Param('id') id: string, 
+    @Param('id') id: string,
+    @Body() startInterviewDto: StartInterviewDto
     // @AuthUser() user: Candidate
   ) {
     // tmp solution
     // return this.meetingService.startInterview(id, user)
-    return this.meetingService.startInterview(id)
+    return this.meetingService.startInterview(id, startInterviewDto)
   }
 
-  @Post('/schedule/:id/finish')
-  @UseInterceptors(FileInterceptor('videoFile'))
-  @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
-  @ApiFile([{ name: 'videoFile' }], {
-    okResponseData: {
-      description: 'finish-interview',
-    },
-  })
+  @Post('/schedule/:scheduleId/finish')
+  // @UseInterceptors(FileInterceptor('videoFile'))
+  // @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
+  // @ApiFile([{ name: 'videoFile' }], {
+  //   okResponseData: {
+  //     description: 'finish-interview',
+  //   },
+  // })
   @HttpCode(HttpStatus.OK)
   async finishInterview(
-    @Param('id') id: string, 
-    @UploadedFile() file: Express.Multer.File
+    @Param('scheduleId') scheduleId: string, 
+    @Query() IsInterviewFinishedEarlierDto: IsInterviewFinishedEarlierDto,
+    // @UploadedFile() file: Express.Multer.File
   ) {
-    return this.meetingService.finishInterview(file)
+    return this.meetingService.finishInterview(scheduleId, IsInterviewFinishedEarlierDto);
   }
 
   @Get('/schedule/:scheduleId')

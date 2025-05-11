@@ -36,4 +36,19 @@ export class InterviewRepository extends Repository<Interview> {
         .where('interview.candidateId = :candidateId', { candidateId })
         .getOne();
   }
+
+  async findByCandidateIdExtended(candidateId: number): Promise<Interview | null> {
+    return this.createQueryBuilder('interview')
+      .where('interview.candidateId = :candidateId', { candidateId })
+      .leftJoinAndSelect('interview.evaluations', 'evaluations')
+      .getOne();
+  }
+
+  async findAllInterviewsByCandidateId(candidateId: number): Promise<Interview[] | null> {
+    return this.createQueryBuilder('interview')
+      .where('interview.candidateId = :candidateId', { candidateId })
+      .leftJoinAndSelect('interview.evaluations', 'evaluations')
+      .leftJoinAndSelect('interview.dishonests', 'dishonests')
+      .getMany();
+  }
 }

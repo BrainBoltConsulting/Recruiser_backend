@@ -39,6 +39,19 @@ export class Interview {
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
+  @Column("boolean", {
+    name: "is_interview_finished_earlier",
+    nullable: true,
+    default: () => "false",
+  })
+  isInterviewFinishedEarlier: boolean | null;
+
+  @Column("text", { name: "browser_name", nullable: true })
+  browserName: string | null;
+
+  @Column("text", { name: "videofile_s3key", nullable: true })
+  videofileS3key: string | null;
+
   @OneToMany(() => Dishonest, (dishonest) => dishonest.interview)
   dishonests: Dishonest[];
 

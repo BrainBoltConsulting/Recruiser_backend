@@ -9,12 +9,11 @@ export enum MessageTypeEnum {
   USER_TOKEN_NOT_FOUND = 'USER_TOKEN_NOT_FOUND',
   USER_IS_ALREADY_EXISTS = 'USER_IS_ALREADY_EXISTS',
   PRODUCT_IS_ALREADY_EXISTS = 'PRODUCT_IS_ALREADY_EXISTS',
-  COMPANY_DATA_ALREADY_EXISTS = 'COMPANY_DATA_ALREADY_EXISTS',
-  COMPANY_DOES_NOT_HAVE_USERS = 'COMPANY_DOES_NOT_HAVE_USERS',
   USER_IS_NOT_FOUND = 'USER_IS_NOT_FOUND',
   USER_NOT_FOUND_IN_COMPANY = 'USER_NOT_FOUND_IN_COMPANY',
   CATEGORY_IS_NOT_FOUND = 'CATEGORY_IS_NOT_FOUND',
-  TAB_SWITCH = 'TAB_SWITCH'
+  TAB_SWITCH = 'TAB_SWITCH',
+  INTERVIEW_FINISHED = 'INTERVIEW_FINISHED'
 }
 
 export const messages = {
@@ -29,9 +28,8 @@ export const messages = {
   USER_IS_ALREADY_EXISTS: "Registration Failed: Email already in use",
   PRODUCT_IS_ALREADY_EXISTS: "Product with this sku is already exists",
   USER_NOT_FOUND_IN_COMPANY: "User not found in this company",
-  COMPANY_DATA_ALREADY_EXISTS: "A company with the provided phone number or name already exists",
-  COMPANY_DOES_NOT_HAVE_USERS: "No users found for this company",
   USER_IS_NOT_FOUND: "User is not found",
   CATEGORY_IS_NOT_FOUND: "Category is not found",
-  TAB_SWITCH: "User switched tabs or minimized"
+  TAB_SWITCH: "User switched tabs or minimized",
+  INTERVIEW_FINISHED: "Interview is successfully finished"
 }

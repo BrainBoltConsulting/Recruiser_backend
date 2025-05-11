@@ -1,3 +1,7 @@
+import { ScheduleRepository } from './../../repositories/ScheduleRepository';
+import { EvaluationRepository } from './../../repositories/EvaluationRepository';
+import { DishonestRepository } from './../../repositories/DishonestRepository';
+import { InterviewRepository } from './../../repositories/InterviewRepository';
 import { MeetingModule } from './../meeting/meeting.module';
 import { LoginRepository } from './../../repositories/LoginRepository';
 import { SkillModule } from './../skill/skill.module';
@@ -15,7 +19,7 @@ import { AuthModule } from '../auth/auth.module';
 @Module({
   imports: [
     TypeOrmExModule.forCustomRepository([CandidateRepository,
-      UserTokenRepository, LoginRepository
+      UserTokenRepository, LoginRepository, InterviewRepository, DishonestRepository, EvaluationRepository, ScheduleRepository
     ]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),

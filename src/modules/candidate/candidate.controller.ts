@@ -63,4 +63,12 @@ export class CandidateController {
   ) {
     return this.candidateService.getCandidatesInterviews(id);
   }
+
+  @Delete(':id/interviews')
+  @HttpCode(HttpStatus.OK)
+  async deleteCandidateInterviews(
+    @Param('id') id: number
+  ) {
+    return this.candidateService.deleteCandidateInterviews(id);
+  }
 }

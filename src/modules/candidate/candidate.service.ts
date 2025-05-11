@@ -1,3 +1,6 @@
+import { InterviewRepository } from './../../repositories/InterviewRepository';
+import { ScheduleRepository } from './../../repositories/ScheduleRepository';
+import { DishonestRepository } from './../../repositories/DishonestRepository';
 import { MeetingService } from './../meeting/meeting.service';
 import { LoginRepository } from './../../repositories/LoginRepository';
 import { SkillService } from './../skill/skill.service';
@@ -20,12 +23,18 @@ import { UpdatePasswordDto } from './dtoes/update-password.dto';
 import { UserUnauthenticatedException } from '../auth/exceptions/user-unauthenticated.exception';
 import { JwtStrategy } from '../auth/jwt.strategy';
 import { GetUsersDto } from './dtoes/get-users.dto';
+import { EvaluationRepository } from '../../repositories/EvaluationRepository';
 
 @Injectable()
 export class CandidateService {
   constructor(
     public readonly skillService: SkillService,
     public readonly candidateRepository: CandidateRepository,
+    public readonly dishonestRepository: DishonestRepository,
+    public readonly evaluationRepository: EvaluationRepository,
+    public readonly scheduleRepository: ScheduleRepository,
+    public readonly interviewRepository: InterviewRepository,
+
     public readonly loginRepository: LoginRepository,
     public readonly meetingService: MeetingService,
     public readonly s3Service: S3Service,
@@ -198,5 +207,26 @@ export class CandidateService {
     const candidateEntity = await this.candidateRepository.getWithLoginData(email);
 
     return candidateEntity;
+  }
+
+  @Transactional()
+  async deleteCandidateInterviews(id: number) {
+    const candidateEntity = await this.candidateRepository.findByCandidateId(id);
+
+    const interviews = await this.interviewRepository.findAllInterviewsByCandidateId(id);
+
+    for (const interview of interviews) {
+      if (interview.evaluations?.length) {
+        await this.evaluationRepository.delete(interview.evaluations.map((ev) => ev.evaluationId))
+      }
+
+      if (interview.dishonests?.length) {
+        await this.dishonestRepository.delete(interview.dishonests.map((dis) => dis.dishonestId))
+      }
+
+      await this.interviewRepository.delete(interview.interviewId)
+    }
+
+    return interviews;
   }
 }
