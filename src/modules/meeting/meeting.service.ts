@@ -1,3 +1,5 @@
+import { SlackNotificationService } from './../../shared/services/slack-notification.service';
+import { CloudWatchLoggerService } from './../../shared/services/cloud-watch-logger.service';
 import { StartInterviewDto } from './dtos/start-interview.dto';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
 import { JobsRepository } from './../../repositories/JobsRepository';
@@ -25,6 +27,8 @@ export class MeetingService {
   constructor(
     private readonly pollyService: PollyService,
     private readonly s3Service: S3Service,
+    private readonly cloudWatchLoggerService: CloudWatchLoggerService,
+    private readonly slackNotificationService: SlackNotificationService,
     private readonly configService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
     private readonly interviewRepository: InterviewRepository,
@@ -44,7 +48,7 @@ export class MeetingService {
   }
 
   async getInterviewsOfCandidate(candidateId: number) {
-    const interviewsOfCandidate = await this.scheduleRepository.findByCandidateId(candidateId);
+    const interviewsOfCandidate = await this.interviewRepository.findByCandidateIdExtended(candidateId);
 
     return interviewsOfCandidate;
   }
@@ -75,7 +79,7 @@ export class MeetingService {
   async startInterview(scheduleId: string, startInterviewDto: StartInterviewDto) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateIdExtended(scheduleEntity.candidateId);
-  
+    
     if (interviewEntityByCandidateId || scheduleEntity.attendedDatetime) {
       throw new BadRequestException('Interview has already happened, can not move forward');
     }
@@ -125,6 +129,21 @@ export class MeetingService {
     if (Object.values(interviewEntityUpdate).length) {
       await this.interviewRepository.update(interviewEntityByCandidateId.interviewId, interviewEntityUpdate)
     }
+
+    await this.slackNotificationService.sendBlocks({ blocks: this.slackNotificationService.formatInterviewSlackPayload({
+      interviewId: interviewEntityByCandidateId.interviewId.toString(),
+      scheduleId: scheduleEntity.scheduleId,
+      jobId: scheduleEntity.jobId,
+      candidate: {
+        id: candidate.candidateId.toString(),
+        fullName: candidate.firstName + ' ' + candidate.lastName
+      },
+      browser: interviewEntityByCandidateId.browserName,
+      attendedTime: scheduleEntity.attendedDatetime,
+      finishedEarly: interviewEntityByCandidateId.isInterviewFinishedEarlier,
+      evaluations: interviewEntityByCandidateId.evaluations,
+      dishonests: interviewEntityByCandidateId.dishonests
+    })});
 
     return UtilsProvider.getMessageOverviewByType(MessageTypeEnum.INTERVIEW_FINISHED);
   }

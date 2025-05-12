@@ -2,9 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import type { IAwsS3Config } from '../../modules/common/interfaces/IAwsS3Config';
-// import { AwsParameterStoreProvider } from './aws-parameter-store-provider.service';
-import { SnakeNamingStrategy } from '../../strategies/snake-naming.strategy';
-import * as fs from 'fs'
 
 @Injectable()
 export class ApiConfigService {
@@ -97,9 +94,14 @@ export class ApiConfigService {
     return this.getString('ADMIN_URL');
   }
 
+  get slackWebhookUrl() {
+    return this.getString('SLACK_WEBHOOK_URL');
+  }
+
   get awsConfig(): IAwsS3Config {
     return {
       region: this.getString('AWS_REGION'),
+      cloudWatchInterviewGroupName: this.getString('AWS_CLOUD_WATCH_INTERVIEW_NAME'),
       credentials: {
         accessKeyId: `${this.getString('AWS_ACCESS_KEY_ID')}`,
         secretAccessKey: this.getString('AWS_SECRET_ACCESS_KEY'),

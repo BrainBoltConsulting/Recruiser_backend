@@ -1,3 +1,4 @@
+import { CloudWatchLoggerService } from './services/cloud-watch-logger.service';
 import { PollyService } from './services/aws-polly.service';
 import { HttpModule } from '@nestjs/axios';
 import { Global, Logger, Module } from '@nestjs/common';
@@ -10,6 +11,7 @@ import {UrlService} from "./services/url.service";
 import {TypeOrmExModule} from "../db/typeorm-ex.module";
 import { UrlRepository } from './repositories/url.repository';
 import { SsmService } from './services/ssm.service';
+import { SlackNotificationService } from './services/slack-notification.service';
 
 const providers = [
   ApiConfigService,
@@ -18,6 +20,8 @@ const providers = [
   SsmService,
   MailService,
   UrlService,
+  CloudWatchLoggerService,
+  SlackNotificationService,
   PollyService
 ];
 

@@ -41,6 +41,7 @@ export class InterviewRepository extends Repository<Interview> {
     return this.createQueryBuilder('interview')
       .where('interview.candidateId = :candidateId', { candidateId })
       .leftJoinAndSelect('interview.evaluations', 'evaluations')
+      .leftJoinAndSelect('interview.dishonests', 'dishonests')
       .getOne();
   }
 

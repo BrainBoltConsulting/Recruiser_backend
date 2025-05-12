@@ -1,23 +1,17 @@
 import { StartInterviewDto } from './dtos/start-interview.dto';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
-// import { AuthWithoutRequiredUserGuard } from './../../guards/auth-without-required-user.guard';
 import { UserDto } from './../common/modules/user/user.dto';
 import { AuthUser } from './../../decorators/auth.decorator';
-// import { Questions } from '../../entities/Questions';
 import { Controller, Get, HttpCode, HttpStatus, Post, Res, Body, Param, UseInterceptors, UploadedFile, UseGuards, Query, Delete } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { MeetingService } from './meeting.service';
 import { Response } from 'express';
-import { Auth, 
- // AuthWithoutRequiredUser 
-} from '../../decorators/http.decorator';
+import { Auth } from '../../decorators/http.decorator';
 import { Role } from '../../constants/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiFile } from '../../decorators/swagger.decorator';
 import { FileSizeGuard } from '../../guards/file-size.guard';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
-// import { Candidate } from '../../entities/Candidate';
-
 
 @Controller('meetings')
 @ApiTags('meetings')
