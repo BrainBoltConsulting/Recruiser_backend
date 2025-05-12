@@ -16,7 +16,7 @@ export class SlackNotificationService {
 
   async send(message: string, options?: { title?: string; color?: string }) {
     if (!this.webhookUrl) {
-      this.logger.warn('Slack webhook URL is not defined.');
+      this.logger.warn('Slack webhook URL is not defined');
       return;
     }
 
