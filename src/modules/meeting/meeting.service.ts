@@ -114,7 +114,7 @@ export class MeetingService {
   async finishInterview(scheduleId: string, isInterviewFinishedEarlierDto: IsInterviewFinishedEarlierDto) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const candidate = scheduleEntity.candidate;
-    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateId(candidate.candidateId);
+    const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateIdExtended(candidate.candidateId);
     const interviewEntityUpdate: Partial<Interview> = {};
     
     if (isInterviewFinishedEarlierDto.isInterviewFinishedEarlier) {
@@ -140,7 +140,7 @@ export class MeetingService {
       },
       browser: interviewEntityByCandidateId.browserName,
       attendedTime: scheduleEntity.attendedDatetime,
-      finishedEarly: interviewEntityByCandidateId.isInterviewFinishedEarlier,
+      finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
       evaluations: interviewEntityByCandidateId.evaluations,
       dishonests: interviewEntityByCandidateId.dishonests
     })});
