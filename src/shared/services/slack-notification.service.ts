@@ -62,9 +62,9 @@ export class SlackNotificationService {
     attendedTime: Date;
     finishedEarly: boolean;
     evaluations: { questionId: string; videofileS3key: string }[];
-    dishonests: { switchCount: number }[];
+    dishonests: { switchCount: number, questionId: string }[];
   }) {
-    const totalSwitches = interview.dishonests?.reduce((sum, d) => sum + d.switchCount, 0);
+    const totalSwitches = interview.dishonests?.reduce((sum, d) => sum + Number(d.switchCount), 0);
   
     const blocks: any[] = [
       {
@@ -133,7 +133,7 @@ export class SlackNotificationService {
           elements: [
             {
               type: 'mrkdwn',
-              text: `*Attempt ${i + 1}:* switch_count = ${d.switchCount}`,
+              text: `*Q${i + 1}:* ${d.questionId}  •  *Switch count:* ${d.switchCount}`,
             },
           ],
         });
