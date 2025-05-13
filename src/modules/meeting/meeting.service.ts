@@ -21,6 +21,7 @@ import { InterviewRepository } from '../../repositories/InterviewRepository';
 import { Transactional } from 'typeorm-transactional';
 import { MessageTypeEnum } from '../../constants/message.enum';
 import { Interview } from '../../entities/Interview';
+import { LoggerTypeEnum } from '../../constants/logger-type.enum';
 
 @Injectable()
 export class MeetingService {
@@ -79,7 +80,7 @@ export class MeetingService {
   async startInterview(scheduleId: string, startInterviewDto: StartInterviewDto) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     const interviewEntityByCandidateId = await this.interviewRepository.findByCandidateIdExtended(scheduleEntity.candidateId);
-    
+
     if (interviewEntityByCandidateId || scheduleEntity.attendedDatetime) {
       throw new BadRequestException('Interview has already happened, can not move forward');
     }
@@ -104,9 +105,16 @@ export class MeetingService {
         browserName: startInterviewDto.browserName
       })
     );
-  
+
     await this.scheduleRepository.update(scheduleId, { attendedDatetime: now });
   
+    // const interviewDetails = {
+    //   scheduleId: scheduleId,
+    //   candidateId: scheduleEntity.candidateId,
+    //   interviewId: interviewEntity.interviewId
+    // }
+    // this.cloudWatchLoggerService.logFromBackend('Interview is going to start...', interviewDetails)
+
     return interviewEntity;
   }
   
