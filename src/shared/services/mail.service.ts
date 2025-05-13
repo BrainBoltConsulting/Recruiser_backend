@@ -98,14 +98,14 @@ export class MailService {
         <body>
             <div class="email-container">
                 <div class="header">
-                <h1>Welcome to Canint!</h1>
+                <h1>Welcome to interview!</h1>
                 <p>Your trusted platform for seamless video interviews</p>
                 </div>
   
                 <div class="content">
                 <h2>Hi ${firstName},</h2>
                 <p>
-                    You’ve been invited to join a meeting on <strong>Canint</strong>. This is a great opportunity to connect and communicate smoothly using our platform. Please find the meeting details below:
+                    You’ve been invited to join a meeting. This is a great opportunity to connect and communicate smoothly using our platform. Please find the meeting details below:
                 </p>
   
                 <p><strong>Meeting Title:</strong> ${primarySkill} interview</p>
@@ -157,7 +157,6 @@ export class MailService {
                     Need assistance? Visit our <a href="[Support Page Link]">Help Center</a> or contact us at 
                     <a href="mailto:support@canint.com">support@canint.com</a>.
                 </p>
-                <p>Thank you for choosing Canint!</p>
                 </div>
             </div>
         </body>
