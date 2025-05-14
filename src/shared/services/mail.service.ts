@@ -30,6 +30,7 @@ export class MailService {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Meeting Invitation</title>
             <style>
+
                 body {
                 font-family: Arial, sans-serif;
                 margin: 0;
@@ -47,7 +48,7 @@ export class MailService {
                 box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
                 }
                 .header {
-                background-color: #4A90E2; /* Adjust this to match Canint's primary color */
+                background-color: rgba(152, 210, 57, 1);
                 color: white;
                 text-align: center;
                 padding: 20px 10px;
@@ -65,22 +66,26 @@ export class MailService {
                 line-height: 1.6;
                 }
                 .content h2 {
-                color: #4A90E2; /* Matching the brand color */
+                color: rgba(152, 210, 57, 1);   
                 font-size: 20px;
                 }
+              
                 .cta-button {
-                display: inline-block;
-                background-color: #adc3e4; /* Primary button color */
-                color: #ffffff;
-                text-decoration: none;
-                font-size: 16px;
-                padding: 12px 24px;
-                border-radius: 5px;
-                text-align: center;
-                margin: 20px 0;
+                    display: inline-block;
+                    background: linear-gradient(90deg, rgba(71, 198, 99, 1), rgba(152, 210, 57, 1), rgba(194, 228, 67, 1));
+                    color: #ffffff !important;
+                    text-decoration: none;
+                    font-size: 16px;
+                    padding: 12px 24px;
+                    border-radius: 5px;
+                    text-align: center;
+                    margin: 20px 0;
+                    }
+                .cta-button a[href] {
+                    color: #ffffff !important;
                 }
                 .cta-button:hover {
-                background-color: #357ABD; /* Slightly darker shade for hover effect */
+                opacity: 0.7
                 }
                 .footer {
                 background-color: #f5f5f5;
@@ -98,7 +103,7 @@ export class MailService {
         <body>
             <div class="email-container">
                 <div class="header">
-                <h1>Welcome to interview!</h1>
+                <h1>Welcome to Hire2o</h1>
                 <p>Your trusted platform for seamless video interviews</p>
                 </div>
   
@@ -154,8 +159,8 @@ export class MailService {
   
                 <div class="footer">
                 <p>
-                    Need assistance? Visit our <a href="[Support Page Link]">Help Center</a> or contact us at 
-                    <a href="mailto:support@canint.com">support@canint.com</a>.
+                    Need assistance? Visit our <a href="https://backend.hire2o.net/contact-us">Help Center</a> or contact us at 
+                    <a href="mailto:info@hire2o.com">info@hire2o.com</a>.
                 </p>
                 </div>
             </div>
