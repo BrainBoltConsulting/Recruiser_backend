@@ -206,7 +206,7 @@ export class MeetingService {
     await this.scheduleRepository.update(scheduleEntity.scheduleId, { meetingLink: newMeetingLink, scheduledDatetime: new Date() });
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
-      subject: "You're Invited! Join Your Meeting on Canint",
+      subject: "You're Invited! Join Your Meeting on Hire2o",
       html: this.mailService.sendInvitationForAMeeting(scheduleEntity.candidate.firstName, jobTitle, newMeetingLink),
     }); 
   }
