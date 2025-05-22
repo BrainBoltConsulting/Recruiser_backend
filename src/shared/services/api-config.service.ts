@@ -23,7 +23,6 @@ export class ApiConfigService {
   get appConfig() {
     return {
       port: this.getNumber('PORT'),
-      domain: this.getString('DOMAIN'),
       frontendUrl: this.getString('FRONTEND_URL'),
     };
   }
