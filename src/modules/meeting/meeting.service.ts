@@ -24,6 +24,8 @@ import { Logger } from '@nestjs/common';
 
 @Injectable()
 export class MeetingService {
+  private readonly logger = new Logger(MeetingService.name)
+
   constructor(
     private readonly pollyService: PollyService,
     private readonly s3Service: S3Service,
@@ -38,7 +40,6 @@ export class MeetingService {
     private readonly dishonestRepository: DishonestRepository,
     private readonly mailService: MailService,
     private readonly questionService: QuestionService,
-    private readonly logger = new Logger(MeetingService.name)
   ) {}
 
 
