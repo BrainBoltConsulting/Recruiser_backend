@@ -240,19 +240,19 @@ export class UtilsProvider {
   }
 
   static generateUniqueIdOfMeeting() {
-    const uniqueId = crypto.randomBytes(4).toString("hex"); // 8-character random string
+    const uniqueId = crypto.randomBytes(4).toString("hex"); 
 
     return uniqueId;
   }
 
-  static replaceS3UriWithS3Key(s3Uri: string): string {
-    const s3Key = s3Uri.replace(`s3://seekers3data/`, '');
+  static replaceS3UriWithS3Key(bucketName: string, s3Uri: string): string {
+    const s3Key = s3Uri.replace(`s3://${bucketName}/`, '');
 
     return s3Key;
   }
 
   static createS3UriFromS3BucketAndKey(bucketName: string, key: string): string {
-    const baseS3UriPath = 's3://seekers3data/';
+    const baseS3UriPath = `s3://${bucketName}/`;
 
     return baseS3UriPath + key
   }

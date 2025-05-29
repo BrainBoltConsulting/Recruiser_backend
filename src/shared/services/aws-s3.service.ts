@@ -146,7 +146,8 @@ export class S3Service {
   }
 
   async generatePreSignedUrl(s3Uri: string, expiresIn: number = 60 * 5) {
-    const s3Key = UtilsProvider.replaceS3UriWithS3Key(s3Uri)
+
+    const s3Key = UtilsProvider.replaceS3UriWithS3Key(this.bucketName, s3Uri)
     const params = {
       Bucket: this.bucketName,
       Key: s3Key,
