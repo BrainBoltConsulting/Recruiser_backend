@@ -111,7 +111,7 @@ export class SlackNotificationService {
           elements: [
             {
               type: 'mrkdwn',
-              text: `*Q${i + 1}:* ${q.questionId}  •  *Recording:* ${UtilsProvider.replaceS3UriWithS3Key(q.videofileS3key)}`,
+              text: `*Q${i + 1}:* ${q.questionId}  •  *Recording:* ${UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofileS3key)}`,
             },
           ],
         });
