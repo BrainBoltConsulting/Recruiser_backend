@@ -51,6 +51,9 @@ export class Manager {
   @Column("text", { name: "last_name", nullable: true })
   lastName: string | null;
 
+  @Column("text", { name: "logo_s3key", nullable: true })
+  logoS3key: string | null;
+
   @OneToMany(
     () => CandidateVerification,
     (candidateVerification) => candidateVerification.manager

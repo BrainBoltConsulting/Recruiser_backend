@@ -1,29 +1,34 @@
-import { InterviewRepository } from './../../repositories/InterviewRepository';
-import { ScheduleRepository } from './../../repositories/ScheduleRepository';
-import { DishonestRepository } from './../../repositories/DishonestRepository';
-import { MeetingService } from './../meeting/meeting.service';
-import { LoginRepository } from './../../repositories/LoginRepository';
-import { SkillService } from './../skill/skill.service';
-import { RegistrationDto } from './../auth/dtos/registration.dto';
-import { Candidate } from '../../entities/Candidate';
-import { CandidateRepository } from '../../repositories/CandidateRepository';
-import { UserDto } from '../common/modules/user/user.dto';
-import { MailService } from '../../shared/services/mail.service';
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Transactional } from 'typeorm-transactional';
+
 import { Role } from '../../constants/role.enum';
-import { UtilsProvider } from '../../providers/utils.provider';
-import { S3Service } from '../../shared/services/aws-s3.service';
-import { UserNotFoundException } from './exceptions/user-not-found.exception';
-import { UserTokenService } from '../auth/user-token.service';
 import { TokenTypeEnum } from '../../constants/token-type.enum';
+import type { Candidate } from '../../entities/Candidate';
+import { UtilsProvider } from '../../providers/utils.provider';
+import { CandidateRepository } from '../../repositories/CandidateRepository';
+import { DishonestRepository } from '../../repositories/DishonestRepository';
+import { EvaluationRepository } from '../../repositories/EvaluationRepository';
+import { InterviewRepository } from '../../repositories/InterviewRepository';
+import { LoginRepository } from '../../repositories/LoginRepository';
+import { ScheduleRepository } from '../../repositories/ScheduleRepository';
+import { S3Service } from '../../shared/services/aws-s3.service';
+import { MailService } from '../../shared/services/mail.service';
 import { UrlService } from '../../shared/services/url.service';
-import { UpdateUserDto } from './dtoes/update-user.dto';
-import { UpdatePasswordDto } from './dtoes/update-password.dto';
+import type { RegistrationDto } from '../auth/dtos/registration.dto';
 import { UserUnauthenticatedException } from '../auth/exceptions/user-unauthenticated.exception';
 import { JwtStrategy } from '../auth/jwt.strategy';
-import { GetUsersDto } from './dtoes/get-users.dto';
-import { EvaluationRepository } from '../../repositories/EvaluationRepository';
+import { UserTokenService } from '../auth/user-token.service';
+import { UserDto } from '../common/modules/user/user.dto';
+import { MeetingService } from '../meeting/meeting.service';
+import { SkillService } from '../skill/skill.service';
+import type { GetUsersDto } from './dtoes/get-users.dto';
+import { UpdatePasswordDto } from './dtoes/update-password.dto';
+import { UpdateUserDto } from './dtoes/update-user.dto';
+import { UserNotFoundException } from './exceptions/user-not-found.exception';
 
 @Injectable()
 export class CandidateService {
@@ -46,34 +51,41 @@ export class CandidateService {
 
   @Transactional()
   async create(data: Partial<RegistrationDto>) {
-    try {  
-      const loginEntity  = await this.loginRepository.save(this.loginRepository.create({
-        loginUsername: data.email,
-        loginPassword: data.password,
-        role: Role.CANDIDATE,
-        email: data.email
-      }));
+    try {
+      const loginEntity = await this.loginRepository.save(
+        this.loginRepository.create({
+          loginUsername: data.email,
+          loginPassword: data.password,
+          role: Role.CANDIDATE,
+          email: data.email,
+        }),
+      );
 
       const candidateEntityToSave = this.candidateRepository.create({
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
         login: loginEntity,
-        loginId: loginEntity.loginId
+        loginId: loginEntity.loginId,
       });
 
       const entity = await this.candidateRepository.save({
         ...candidateEntityToSave,
       });
 
-      await this.skillService.createSkillForCadidate(data.skillId, entity.candidateId);
+      await this.skillService.createSkillForCadidate(
+        data.skillId,
+        entity.candidateId,
+      );
 
       return entity;
     } catch (error) {
-      console.log(error)
-      throw new BadRequestException()
+      console.warn(error);
+
+      throw new BadRequestException();
     }
   }
+
   async getEntityByEmail(email: string, withoutException?: boolean) {
     const entity = await this.candidateRepository.findByEmail(email);
 
@@ -84,7 +96,7 @@ export class CandidateService {
     return entity;
   }
 
-   async getEntityById(id: string, withoutException?: boolean) {
+  async getEntityById(id: string, withoutException?: boolean) {
     const entity = await this.candidateRepository.findById(id);
 
     if (!entity && !withoutException) {
@@ -94,13 +106,12 @@ export class CandidateService {
     return entity;
   }
 
-
   @Transactional()
   async sendInvitationViaEmail(email: string): Promise<void> {
     const userByEmail = await this.candidateRepository.findByEmail(email);
 
     if (!userByEmail) {
-      throw new UserNotFoundException()
+      throw new UserNotFoundException();
     }
 
     const token = this.jwtService.generateToken({
@@ -110,68 +121,74 @@ export class CandidateService {
         // user: userByEmail.toDto({isAccess: true}),
         type: TokenTypeEnum.SET_PASSWORD,
       },
-    })
+    });
 
     await this.userTokenService.upsert({
       token,
       userId: userByEmail.candidateId,
-      type: TokenTypeEnum.SET_PASSWORD
-    })
+      type: TokenTypeEnum.SET_PASSWORD,
+    });
 
     // await this.mailService.send({
     //   to: userByEmail.email,
     //   subject: "You're Invited! Join Your Meeting on Canint",
     //   // tmp solution
     //   html: this.mailService.sendInvitationForAMeeting(userByEmail.firstName, "userByEmail", ),
-    // });  
+    // });
   }
 
   async getUserById(id: number) {
     const entity = await this.candidateRepository.findByCandidateId(id);
-    
+
     //return entity.toDto();
     return entity;
   }
- 
+
   @Transactional()
   async updateUser(id: number, user: UserDto, updateUserDto: UpdateUserDto) {
-
-    if (Object.keys(updateUserDto).length) {
+    if (Object.keys(updateUserDto).length > 0) {
       await this.candidateRepository.update(id, {
-        firstName: user.firstName
+        firstName: user.firstName,
       });
     }
 
-    return (await this.candidateRepository.findByCandidateId(id));
+    return this.candidateRepository.findByCandidateId(id);
 
     // return (await this.candidateRepository.findById(id)).toDto({isAccess: true});
   }
 
   async getAllUsers(getUsersDto: GetUsersDto): Promise<Candidate[]> {
-    let userEntitiesQuery = await this.candidateRepository.getAllSorted();
+    const userEntitiesQuery = await this.candidateRepository.getAllSorted();
 
     // const [userEntities, pageMetaDto] = await userEntitiesQuery.paginate(
     //   getUsersDto
-    // );  
+    // );
 
-    return userEntitiesQuery
+    return userEntitiesQuery;
   }
 
   @Transactional()
-  async updateUserPassword(id: string, user: UserDto, body: UpdatePasswordDto): Promise<void> {
+  async updateUserPassword(
+    id: string,
+    user: UserDto,
+    body: UpdatePasswordDto,
+  ): Promise<void> {
     if (id !== user.id) {
-      throw new ForbiddenException()
+      throw new ForbiddenException();
     }
+
     const userEntity = await this.getEntityByEmail(user.email);
 
     await this.validateUserPassword(userEntity, body.oldPassword);
-    
+
     if (body.newPassword !== body.confirmNewPassword) {
       throw new BadRequestException('Passwords do not match');
     }
 
     if (body.oldPassword === body.newPassword) {
-      throw new BadRequestException('New password cannot be the same as old password')
+      throw new BadRequestException(
+        'New password cannot be the same as old password',
+      );
     }
 
     // await this.addOrResetPassword(id, body.newPassword);
@@ -181,15 +198,15 @@ export class CandidateService {
     const isPasswordValid = await UtilsProvider.validateHash(
       password,
       // tmp solution
-      "userEntity.password",
+      'userEntity.password',
     );
-    
+
     if (!isPasswordValid) {
       throw new UserUnauthenticatedException('password is an invalid');
     }
 
     return userEntity;
-  } 
+  }
 
   async getCandidatesInterviews(candidateId: number) {
     await this.candidateRepository.findByCandidateId(candidateId);
@@ -204,27 +221,37 @@ export class CandidateService {
   }
 
   async getCandidateWithLoginData(email: string) {
-    const candidateEntity = await this.candidateRepository.getWithLoginData(email);
+    const candidateEntity = await this.candidateRepository.getWithLoginData(
+      email,
+    );
 
     return candidateEntity;
   }
 
   @Transactional()
   async deleteCandidateInterviews(id: number) {
-    const candidateEntity = await this.candidateRepository.findByCandidateId(id);
+    await this.candidateRepository.findByCandidateId(id);
 
-    const interviews = await this.interviewRepository.findAllInterviewsByCandidateId(id);
+    const interviews =
+      await this.interviewRepository.findAllInterviewsByCandidateId(id);
 
     for (const interview of interviews) {
       if (interview.evaluations?.length) {
-        await this.evaluationRepository.delete(interview.evaluations.map((ev) => ev.evaluationId))
+        // eslint-disable-next-line no-await-in-loop
+        await this.evaluationRepository.delete(
+          interview.evaluations.map((ev) => ev.evaluationId),
+        );
       }
 
       if (interview.dishonests?.length) {
-        await this.dishonestRepository.delete(interview.dishonests.map((dis) => dis.dishonestId))
+        // eslint-disable-next-line no-await-in-loop
+        await this.dishonestRepository.delete(
+          interview.dishonests.map((dis) => dis.dishonestId),
+        );
       }
 
-      await this.interviewRepository.delete(interview.interviewId)
+      // eslint-disable-next-line no-await-in-loop
+      await this.interviewRepository.delete(interview.interviewId);
     }
 
     return interviews;

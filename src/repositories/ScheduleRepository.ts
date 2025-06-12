@@ -53,6 +53,8 @@ export class ScheduleRepository extends Repository<Schedule> {
     return this.createQueryBuilder('schedule')
       .where('schedule.meetingLink = :meetingLink', { meetingLink })
       .leftJoinAndSelect('schedule.candidate', 'candidate')
+      .leftJoinAndSelect('schedule.job', 'job')
+      .leftJoinAndSelect('job.manager', 'manager')
       .getOne();
   }
 } 

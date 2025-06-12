@@ -10,7 +10,7 @@ export class PollyService {
       region: 'us-east-1',
       credentials: {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
       },
     });
   }
@@ -23,13 +23,11 @@ export class PollyService {
     };
 
     const result = await this.polly.synthesizeSpeech(params).promise();
-    console.log(result)
+
     if (result.AudioStream) {
       return result.AudioStream as Buffer;
-    } else {
-      throw new Error('Failed to generate speech');
     }
-  }
 
-  
+    throw new Error('Failed to generate speech');
+  }
 }
