@@ -1,32 +1,54 @@
-import { QuestionDto } from './../common/modules/question/question.dto';
-import { CreateQuestionDto } from './dtos/create-question.dto';
-import { Questions } from '../../entities/Questions';
-import { Controller, Get, HttpCode, HttpStatus, Post, Query, Res, Body, Delete, Param, Header } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Query,
+  Res,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiTags } from '@nestjs/swagger';
-import { QuestionService } from './question.service';
 import { Response } from 'express';
-import { GetQuestionsDto } from './dtos/get-questions.dto';
 
+import { ApiFile } from '../../decorators/swagger.decorator';
+import type { Questions } from '../../entities/Questions';
+import { FileSizeGuard } from '../../guards/file-size.guard';
+import { CreateQuestionDto } from './dtos/create-question.dto';
+import { GetQuestionsDto } from './dtos/get-questions.dto';
+import { QuestionService } from './question.service';
 
 @Controller('questions')
 @ApiTags('questions')
 export class QuestionController {
-  constructor(private readonly questionService: QuestionService) { }
+  constructor(private readonly questionService: QuestionService) {}
 
   @Get('')
   @HttpCode(HttpStatus.OK)
-  async getAllQuestions(
-    @Query() getQuestionsDto: GetQuestionsDto,
-  ) {
-      return this.questionService.getAllQuestions(getQuestionsDto);
+  async getAllQuestions(@Query() getQuestionsDto: GetQuestionsDto) {
+    return this.questionService.getAllQuestions(getQuestionsDto);
   }
 
   @Post('')
+  @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
+  @ApiFile([{ name: 'videoFile' }], {
+    okResponseData: {
+      description: 'Create new question',
+    },
+  })
+  @UseInterceptors(FileFieldsInterceptor([{ name: 'videoFile', maxCount: 1 }]))
   @HttpCode(HttpStatus.OK)
   async createNewQuestion(
     @Body() createQuestionDto: CreateQuestionDto,
-  ): Promise<any> {
-      return this.questionService.createNewQuestion(createQuestionDto);
+    @UploadedFiles() files?: { videoFile?: Express.Multer.File[] },
+  ): Promise<Questions> {
+    return this.questionService.createNewQuestion(createQuestionDto, files);
   }
 
   @Get(':id/voice')
@@ -36,16 +58,13 @@ export class QuestionController {
   ): Promise<Response> {
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Disposition', 'inline; filename="speech.mp3"');
-    
+
     return res.send(await this.questionService.getSingleQuestionsVoice(id));
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.OK)
-  async deleteQuestionById(
-    @Param('id') id: string 
-  ): Promise<void> {
-    return this.questionService.deleteQuestionById(id)
+  async deleteQuestionById(@Param('id') id: string): Promise<void> {
+    return this.questionService.deleteQuestionById(id);
   }
-
 }

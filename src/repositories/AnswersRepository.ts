@@ -1,12 +1,11 @@
-
-import { Repository } from 'typeorm';
-import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+
+import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { Answers } from '../entities/Answers';
 
 @CustomRepository(Answers)
 export class AnswersRepository extends Repository<Answers> {
-
   async findByAnswer(answer: string): Promise<Answers | null> {
     return this.createQueryBuilder('answers')
       .where('answers.answer = :answer', { answer })
@@ -29,5 +28,12 @@ export class AnswersRepository extends Repository<Answers> {
     }
 
     return entity;
+  }
+
+  async deleteByQuestionId(questionId: string): Promise<void> {
+    await this.createQueryBuilder('answers')
+      .delete()
+      .where('questionId = :questionId', { questionId })
+      .execute();
   }
 }

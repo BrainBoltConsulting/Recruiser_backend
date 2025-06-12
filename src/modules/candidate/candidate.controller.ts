@@ -1,15 +1,28 @@
-import { Controller, Get, HttpCode, HttpStatus, Put, Body, Param, Delete, Query, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { CandidateService } from './candidate.service';
-import { Auth, UUIDParam } from '../../decorators/http.decorator';
+
 import { Role } from '../../constants/role.enum';
+import { Auth, UUIDParam } from '../../decorators/http.decorator';
+import type { Candidate } from '../../entities/Candidate';
+import { CandidateService } from './candidate.service';
 import { GetUsersDto } from './dtoes/get-users.dto';
-import { Candidate } from '../../entities/Candidate';
 
 @Controller('candidates')
 @ApiTags('candidates')
 export class CandidateController {
-  constructor(private readonly candidateService: CandidateService) { }
+  constructor(private readonly candidateService: CandidateService) {}
+
   @Get('')
   // @Auth([Role.SUPER_ADMIN])
   @HttpCode(HttpStatus.OK)
@@ -22,18 +35,14 @@ export class CandidateController {
   @Get(':id')
   // @Auth([Role.SUPER_ADMIN])
   @HttpCode(HttpStatus.OK)
-  async getCandidateById(
-    @Param('id') id: number,
-  ): Promise<Candidate> {
-      return this.candidateService.getUserById(id);
+  async getCandidateById(@Param('id') id: number): Promise<Candidate> {
+    return this.candidateService.getUserById(id);
   }
 
   @Delete(':id')
-  @Auth([Role.SUPER_ADMIN], { setUserSession: true})
+  @Auth([Role.SUPER_ADMIN], { setUserSession: true })
   @HttpCode(HttpStatus.OK)
-  async deleteCandidateById(
-    @UUIDParam('id') id: number,
-  ): Promise<void> {
+  async deleteCandidateById(@UUIDParam('id') id: number): Promise<void> {
     return this.candidateService.deleteUser(id);
   }
 
@@ -58,17 +67,13 @@ export class CandidateController {
 
   @Get(':id/interviews')
   @HttpCode(HttpStatus.OK)
-  async getSingleCandidatesInterviews(
-    @Param('id') id: number
-  ) {
+  async getSingleCandidatesInterviews(@Param('id') id: number) {
     return this.candidateService.getCandidatesInterviews(id);
   }
 
   @Delete(':id/interviews')
   @HttpCode(HttpStatus.OK)
-  async deleteCandidateInterviews(
-    @Param('id') id: number
-  ) {
+  async deleteCandidateInterviews(@Param('id') id: number) {
     return this.candidateService.deleteCandidateInterviews(id);
   }
 }
