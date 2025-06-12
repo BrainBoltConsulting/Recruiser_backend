@@ -56,7 +56,8 @@ export class QuestionService {
       const responseFromS3 = await this.s3Service.uploadFile(
         videoFile,
         'VideoAvatarQuestions',
-        questionEntityToSave.questionId,
+        questionEntityToSave.questionId +
+          videoFile.mimetype.replace('video/', '.'),
       );
 
       questionEntityToSave.questionVideoS3Link =
