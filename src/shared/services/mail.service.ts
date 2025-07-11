@@ -73,7 +73,7 @@ export class MailService {
                 .cta-button {
                     display: inline-block;
                     background: linear-gradient(90deg, rgba(71, 198, 99, 1), rgba(152, 210, 57, 1), rgba(194, 228, 67, 1));
-                    color: #ffffff !important;
+                    color: blue;
                     text-decoration: none;
                     font-size: 16px;
                     padding: 12px 24px;
@@ -82,7 +82,7 @@ export class MailService {
                     margin: 20px 0;
                     }
                 .cta-button a[href] {
-                    color: #ffffff !important;
+                    color: blue;
                 }
                 .cta-button:hover {
                 opacity: 0.7
