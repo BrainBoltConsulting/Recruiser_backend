@@ -76,6 +76,34 @@ export class S3Service {
       .promise();
   }
 
+  async createMultipartUpload(key: string) {
+    return this.s3.createMultipartUpload({ Bucket: this.bucketName, Key: key }).promise();
+  }
+  
+  async uploadPart(key: string, uploadId: string, partNumber: number, body: Buffer) {
+    return this.s3.uploadPart({
+      Bucket: this.bucketName,
+      Key: key,
+      PartNumber: partNumber,
+      UploadId: uploadId,
+      Body: body,
+    }).promise();
+  }
+  
+  async completeMultipartUpload(key: string, uploadId: string, parts: { ETag: string, PartNumber: number }[]) {
+    const sortedParts = parts
+      .map(p => ({ ETag: p.ETag, PartNumber: Number(p.PartNumber) }))
+      .sort((a, b) => a.PartNumber - b.PartNumber);
+
+    console.log('sortedParts', sortedParts);
+    return this.s3.completeMultipartUpload({
+      Bucket: this.bucketName,
+      Key: key,
+      UploadId: uploadId,
+      MultipartUpload: { Parts: sortedParts },
+    }).promise();
+  }
+
   generatePreSignedUrl(s3Uri: string, expiresIn: number = 60 * 5) {
     const s3Key = UtilsProvider.replaceS3UriWithS3Key(this.bucketName, s3Uri);
     const params = {
@@ -85,5 +113,11 @@ export class S3Service {
     };
 
     return this.s3.getSignedUrl('getObject', params);
+  }
+
+  generatePublicUrl(s3Uri: string): string {
+    const s3Key = UtilsProvider.replaceS3UriWithS3Key(this.bucketName, s3Uri);
+
+    return `https://${this.bucketName}.s3.amazonaws.com/${s3Key}`;
   }
 }
