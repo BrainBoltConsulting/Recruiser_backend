@@ -308,7 +308,7 @@ export class MeetingService {
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
       subject: `You're Invited! Join Your Meeting on ${scheduleEntity.job.manager.company || 'Hire2o'}`,
-      bcc: ['robert-sahakyan@mail.ru'],
+      bcc: [ scheduleEntity.job.manager.email ],
       html: this.mailService.sendInvitationForAMeeting(
         scheduleEntity.candidate.firstName,
         scheduleEntity.job.manager,
