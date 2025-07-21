@@ -63,6 +63,9 @@ export class Manager {
   @OneToMany(() => Interview, (interview) => interview.manager)
   interviews: Interview[];
 
+  @Column("text", { name: "company", nullable: true })  
+  company: string | null;
+
   @OneToMany(
     () => JobShortlistedProfiles,
     (jobShortlistedProfiles) => jobShortlistedProfiles.manager

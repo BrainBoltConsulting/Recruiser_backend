@@ -10,6 +10,7 @@ module.exports = {
         ecmaVersion: 2018,
         project: './tsconfig.eslint.json',
         sourceType: 'module',
+        tsconfigRootDir: __dirname,
     },
     extends: [
         'plugin:import/typescript',
