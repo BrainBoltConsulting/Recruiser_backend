@@ -25,6 +25,8 @@ import { QuestionService } from '../question/question.service';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
 import type { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
+import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
+import { Schedule } from '../../entities/Schedule';
 
 @Injectable()
 export class MeetingService {
@@ -302,15 +304,25 @@ export class MeetingService {
   }
 
   @Transactional()
-  async sendInvitionToCandidate(scheduleId: string) {
+  async sendInvitionToCandidate(scheduleId: string, inviteToInterviewDto?: InviteToInterviewDto) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+
+    if (scheduleEntity.attendedDatetime) {
+      throw new BadRequestException('Interview has already happened, can not move forward');
+    }
+
     const newMeetingLink = this.generateNewMeetingLink();
     const jobTitle = scheduleEntity.job.jobTitle || '';
 
-    await this.scheduleRepository.update(scheduleEntity.scheduleId, {
+    const updatedScheduleEntity: Partial<Schedule> = {
       meetingLink: newMeetingLink,
-      scheduledDatetime: new Date(),
-    });
+    }
+
+    if (inviteToInterviewDto) {
+      updatedScheduleEntity.scheduledDatetime = inviteToInterviewDto.scheduledDate;
+    }
+
+    await this.scheduleRepository.update(scheduleEntity.scheduleId, updatedScheduleEntity);
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
       subject: `${scheduleEntity.job.manager.company || 'Hire2o'} Invites You For An AI Interview `,
