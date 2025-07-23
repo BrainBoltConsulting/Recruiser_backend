@@ -117,22 +117,22 @@ export class MailService {
                 <h1 style="text-align: center;">Welcome to ${
                   manager.company || 'Hire2o'
                 }</h1>
-                <p>Your trusted platform for seamless video interviews</p>
+                <p>Powered by <a href="https://hire2o.ai">Hire2o.ai</a></p>
                 </div>
   
                 <div class="content">
                 <h2>Hi ${firstName},</h2>
                 <p>
-                    You've been invited to join a meeting. This is a great opportunity to connect and communicate smoothly using our platform. 
+                    You've been invited to join a meeting. This is a great opportunity to connect and communicate smoothly using our solution. 
                     Please find the meeting details below:
                 </p>
   
-                <p><strong>Meeting Title:</strong> ${primarySkill} interview</p>
+                <p><strong>Meeting Title:</strong> ${primarySkill} Interview</p>
   
-                <h3>Read carefully before taking your Interview:</h3>
+                <h3>Read carefully before taking your interview:</h3>
                 <p><strong>Duration</strong></p>
                 <ul>
-                  <li>Your interview will take about 20 mins</li>
+                  <li>Your interview will take about 25-30 mins</li>
                   <li>Make sure that your camera and microphone is on</li>
                   <li>Make sure you are in a well lit and a quiet area</li>
                 </ul>
@@ -167,7 +167,7 @@ export class MailService {
                 </p>
   
                 <p>
-                    Please ensure you check your audio and video settings before the meeting to avoid any interruptions. Our platform makes it easy to do a quick pre-check for both.
+                    Please ensure you check your audio and video settings before the meeting to avoid any interruptions. Our solution makes it easy to do a quick pre-check for both.
                 </p>
                 </div>
   
