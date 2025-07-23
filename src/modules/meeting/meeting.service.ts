@@ -322,8 +322,6 @@ export class MeetingService {
         newMeetingLink,
       ),
     });
-
-    return newMeetingLink;
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {

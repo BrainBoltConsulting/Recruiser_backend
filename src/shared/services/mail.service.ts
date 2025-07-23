@@ -117,7 +117,7 @@ export class MailService {
                 <h1 style="text-align: center;">Welcome to ${
                   manager.company || 'Hire2o'
                 }</h1>
-                <p>Powered by <a href="https://hire2o.ai">Hire2o.ai</a></p>
+                <p><em>Powered by <a href="https://hire2o.ai">Hire2o.ai</a></em></p>
                 </div>
   
                 <div class="content">
