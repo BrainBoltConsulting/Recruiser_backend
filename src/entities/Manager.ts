@@ -54,6 +54,7 @@ export class Manager {
   @Column("text", { name: "logo_s3key", nullable: true })
   logoS3key: string | null;
 
+
   @OneToMany(
     () => CandidateVerification,
     (candidateVerification) => candidateVerification.manager
@@ -62,6 +63,9 @@ export class Manager {
 
   @OneToMany(() => Interview, (interview) => interview.manager)
   interviews: Interview[];
+
+  @Column("text", { name: "company", nullable: true })  
+  company: string | null;
 
   @OneToMany(
     () => JobShortlistedProfiles,

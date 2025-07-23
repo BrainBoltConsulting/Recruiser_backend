@@ -102,7 +102,13 @@ export class MeetingService {
         `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}`,
     );
 
-    return scheduleEntity;
+    await this.sendInvitionToCandidate(scheduleEntity.scheduleId);
+
+    this.logger.log(
+      `Invitation sent to candidate ${scheduleEntity.candidate.firstName} ${scheduleEntity.candidate.lastName}`,
+    );
+
+    return this.scheduleRepository.findById(scheduleEntity.scheduleId);
   }
 
   @Transactional()
@@ -160,6 +166,8 @@ export class MeetingService {
 
     await this.scheduleRepository.update(scheduleId, { attendedDatetime: now });
 
+
+    const { uploadId, s3Key } = await this.initiateMultipartUpload(scheduleId);
     // const interviewDetails = {
     //   scheduleId: scheduleId,
     //   candidateId: scheduleEntity.candidateId,
@@ -170,7 +178,7 @@ export class MeetingService {
       `Interview started successfully for candidateId=${scheduleEntity.candidateId}, interviewId=${interviewEntity.interviewId}`,
     );
 
-    return interviewEntity;
+    return { ...interviewEntity, uploadId, s3Key };
   }
 
   @Transactional()
@@ -305,9 +313,11 @@ export class MeetingService {
     });
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
-      subject: "You're Invited! Join Your Meeting on Hire2o",
+      subject: `${scheduleEntity.job.manager.company || 'Hire2o'} Invites You For An AI Interview `,
+      bcc: [ scheduleEntity.job.manager.managerEmail ],
       html: this.mailService.sendInvitationForAMeeting(
         scheduleEntity.candidate.firstName,
+        scheduleEntity.job.manager,
         jobTitle,
         newMeetingLink,
       ),
@@ -410,6 +420,43 @@ export class MeetingService {
       );
 
     return questionsListOrdered.toDtos();
+  }
+
+  async initiateMultipartUpload(scheduleId: string) {
+    const s3Key = `Complete_Interview/${scheduleId}/interview_${Date.now()}.webm`;
+    const res = await this.s3Service.createMultipartUpload(s3Key);
+    return { uploadId: res.UploadId, s3Key };
+  }
+  
+  async uploadMultipartChunk(
+    scheduleId: string,
+    s3Key: string,
+    chunk: Express.Multer.File,
+    uploadId: string,
+    partNumber: number
+  ) {
+    const res = await this.s3Service.uploadPart(
+      s3Key,
+      uploadId,
+      partNumber,
+      chunk.buffer
+    );
+    return { ETag: res.ETag, PartNumber: partNumber };
+  }
+  
+  async completeMultipartUpload(
+    scheduleId: string,
+    s3Key: string,
+    uploadId: string,
+    parts: { ETag: string, PartNumber: number }[]
+  ) {
+    const res = await this.s3Service.completeMultipartUpload(
+      s3Key,
+      uploadId,
+      parts
+    );
+
+    return { success: true, s3Key };
   }
 
   generateNewMeetingLink() {

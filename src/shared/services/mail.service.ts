@@ -1,16 +1,21 @@
-import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { Injectable } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import type { ISendMailOptions } from '@nestjs-modules/mailer/dist/interfaces/send-mail-options.interface';
+
+import type { Manager } from '../../entities/Manager';
 import { ApiConfigService } from './api-config.service';
+import { S3Service } from './aws-s3.service';
 
 @Injectable()
 export class MailService {
-    public readonly logoSrc: string = ''
-    public readonly footerImg: string = ''
+  public readonly logoSrc: string = '';
+
+  public readonly footerImg: string = '';
 
   constructor(
     private readonly httpService: HttpService,
+    private readonly s3Service: S3Service,
     private readonly mailerService: MailerService,
     private readonly configService: ApiConfigService,
   ) {}
@@ -20,8 +25,12 @@ export class MailService {
     await this.mailerService.sendMail(mailData);
   }
 
-
-  sendInvitationForAMeeting(firstName: string, primarySkill: string, meetingLink: string) {
+  sendInvitationForAMeeting(
+    firstName: string,
+    manager: Manager,
+    primarySkill: string,
+    meetingLink: string,
+  ) {
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -48,10 +57,9 @@ export class MailService {
                 box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
                 }
                 .header {
-                background-color: rgba(152, 210, 57, 1);
-                color: white;
+                color: rgba(152, 210, 57, 1);
                 text-align: center;
-                padding: 20px 10px;
+                padding: 0px 10px;
                 }
                 .header h1 {
                 margin: 0;
@@ -103,22 +111,28 @@ export class MailService {
         <body>
             <div class="email-container">
                 <div class="header">
-                <h1>Welcome to Hire2o</h1>
-                <p>Your trusted platform for seamless video interviews</p>
+                ${manager.logoS3key ? `<img src="${
+                  this.s3Service.generatePublicUrl(manager.logoS3key)
+                }" alt="Company Logo" style="width: 100px; height: 100px; display: block; margin: 0 auto;">` : ''}
+                <h1 style="text-align: center;">Welcome to ${
+                  manager.company || 'Hire2o'
+                }</h1>
+                <p><em>Powered by <a href="https://hire2o.ai">Hire2o.ai</a></em></p>
                 </div>
   
                 <div class="content">
                 <h2>Hi ${firstName},</h2>
                 <p>
-                    You’ve been invited to join a meeting. This is a great opportunity to connect and communicate smoothly using our platform. Please find the meeting details below:
+                    You've been invited to join a meeting. This is a great opportunity to connect and communicate smoothly using our solution. 
+                    Please find the meeting details below:
                 </p>
   
-                <p><strong>Meeting Title:</strong> ${primarySkill} interview</p>
+                <p><strong>Meeting Title:</strong> ${primarySkill} Interview</p>
   
-                <h3>Read carefully before taking your Interview:</h3>
+                <h3>Read carefully before taking your interview:</h3>
                 <p><strong>Duration</strong></p>
                 <ul>
-                  <li>Your interview will take about 20 mins</li>
+                  <li>Your interview will take about 25-30 mins</li>
                   <li>Make sure that your camera and microphone is on</li>
                   <li>Make sure you are in a well lit and a quiet area</li>
                 </ul>
@@ -153,7 +167,7 @@ export class MailService {
                 </p>
   
                 <p>
-                    Please ensure you check your audio and video settings before the meeting to avoid any interruptions. Our platform makes it easy to do a quick pre-check for both.
+                    Please ensure you check your audio and video settings before the meeting to avoid any interruptions. Our solution makes it easy to do a quick pre-check for both.
                 </p>
                 </div>
   
@@ -166,11 +180,6 @@ export class MailService {
             </div>
         </body>
     </html>
-    `
+    `;
   }
-  
-
-
-
-  
 }

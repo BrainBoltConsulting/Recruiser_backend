@@ -27,6 +27,7 @@ export class ScheduleRepository extends Repository<Schedule> {
       .leftJoinAndSelect('job.jobSkills', 'jobSkills')
       .leftJoinAndSelect('candidate.candidateSkills', 'candidateSkills')
       .leftJoinAndSelect('candidateSkills.skill', 'skill')
+      .leftJoinAndSelect('job.manager', 'manager')
       .getOne();
 
     if (!entity) {
