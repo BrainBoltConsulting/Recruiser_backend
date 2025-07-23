@@ -108,7 +108,7 @@ export class MeetingService {
       `Invitation sent to candidate ${scheduleEntity.candidate.firstName} ${scheduleEntity.candidate.lastName}`,
     );
 
-    return scheduleEntity;
+    return this.scheduleRepository.findById(scheduleEntity.scheduleId);
   }
 
   @Transactional()
@@ -322,6 +322,8 @@ export class MeetingService {
         newMeetingLink,
       ),
     });
+
+    return newMeetingLink;
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {
