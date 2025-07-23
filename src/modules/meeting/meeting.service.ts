@@ -102,6 +102,12 @@ export class MeetingService {
         `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}`,
     );
 
+    await this.sendInvitionToCandidate(scheduleEntity.scheduleId);
+
+    this.logger.log(
+      `Invitation sent to candidate ${scheduleEntity.candidate.firstName} ${scheduleEntity.candidate.lastName}`,
+    );
+
     return scheduleEntity;
   }
 
