@@ -20,6 +20,7 @@ import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earl
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
 import { MeetingService } from './meeting.service';
+import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 
 @Controller('meetings')
 @ApiTags('meetings')
@@ -81,8 +82,12 @@ export class MeetingController {
 
   @Post('/schedule/:scheduleId/invite')
   @HttpCode(HttpStatus.OK)
-  async sendInvitationToCandidate(@Param('scheduleId') scheduleId: string) {
-    return this.meetingService.sendInvitionToCandidate(scheduleId);
+  async sendInvitationToCandidate(
+    @Param('scheduleId') scheduleId: string,
+    @Body() inviteToInterviewDto: InviteToInterviewDto,
+
+  ) {
+    return this.meetingService.sendInvitionToCandidate(scheduleId, inviteToInterviewDto);
   }
 
   // tmp solution
@@ -126,5 +131,25 @@ export class MeetingController {
       scheduleId,
       questionId,
     );
+  }
+
+  @Post('/schedule/:scheduleId/interview-multipart-chunk')
+  @UseInterceptors(FileInterceptor('chunk'))
+  @HttpCode(HttpStatus.OK)
+  async uploadMultipartChunk(
+    @Param('scheduleId') scheduleId: string,
+    @UploadedFile() chunk: Express.Multer.File,
+    @Body() body: { uploadId: string, partNumber: number, s3Key: string }
+  ) {
+    return this.meetingService.uploadMultipartChunk(scheduleId, body.s3Key, chunk, body.uploadId, body.partNumber);
+  }
+  
+  @Post('/schedule/:scheduleId/interview-multipart-complete')
+  @HttpCode(HttpStatus.OK)
+  async completeMultipartUpload(
+    @Param('scheduleId') scheduleId: string,
+    @Body() body: { uploadId: string, parts: { ETag: string, PartNumber: number }[], s3Key: string }
+  ) {
+    return this.meetingService.completeMultipartUpload(scheduleId, body.s3Key, body.uploadId, body.parts);
   }
 }
