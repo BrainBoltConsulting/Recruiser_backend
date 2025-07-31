@@ -15,6 +15,7 @@ import { CandidateModule } from '../candidate/candidate.module';
 import { QuestionModule } from '../question/question.module';
 import { MeetingController } from './meeting.controller';
 import { MeetingService } from './meeting.service';
+import { InterviewUploadGateway } from './interview-upload.gateway';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { MeetingService } from './meeting.service';
     forwardRef(() => CandidateModule),
     forwardRef(() => QuestionModule),
   ],
-  providers: [MeetingService, JwtStrategy],
+  providers: [MeetingService, JwtStrategy, InterviewUploadGateway],
   controllers: [MeetingController],
   exports: [MeetingService, JwtStrategy],
 })
