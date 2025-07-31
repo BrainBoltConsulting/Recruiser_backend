@@ -1,5 +1,6 @@
 import { CloudWatchLoggerService } from './services/cloud-watch-logger.service';
 import { PollyService } from './services/aws-polly.service';
+import { EnhancedLoggerService } from './services/enhanced-logger.service';
 import { HttpModule } from '@nestjs/axios';
 import { Global, Logger, Module } from '@nestjs/common';
 import { S3, SSM } from 'aws-sdk';
@@ -22,7 +23,8 @@ const providers = [
   UrlService,
   CloudWatchLoggerService,
   SlackNotificationService,
-  PollyService
+  PollyService,
+  EnhancedLoggerService
 ];
 
 @Global()
