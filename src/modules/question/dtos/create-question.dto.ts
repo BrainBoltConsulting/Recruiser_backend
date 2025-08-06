@@ -12,13 +12,6 @@ export class CreateQuestionDto {
   @IsPositiveNumber()
   difficulty: number;
 
-  @ApiProperty({ default: 1 })
-  @Transform(({ value }) => Number(value))
-  @Min(1)
-  @Max(4)
-  @IsPositiveNumber()
-  level: number;
-
   @ApiProperty()
   @Transform(({ value }) => Number(value))
   @IsNumber()

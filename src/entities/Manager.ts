@@ -6,70 +6,70 @@ import {
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
-} from "typeorm";
-import { CandidateVerification } from "./CandidateVerification";
-import { Interview } from "./Interview";
-import { JobShortlistedProfiles } from "./JobShortlistedProfiles";
-import { Jobs } from "./Jobs";
-import { Login } from "./Login";
+} from 'typeorm';
 
-@Index("manager_manager_email_key", ["managerEmail"], { unique: true })
-@Index("manager_pkey", ["managerId"], { unique: true })
-@Entity("manager", { schema: "public" })
+import { CandidateVerification } from './CandidateVerification';
+import { Interview } from './Interview';
+import { Jobs } from './Jobs';
+import { JobShortlistedProfiles } from './JobShortlistedProfiles';
+import { Login } from './Login';
+
+@Index('manager_manager_email_key', ['managerEmail'], { unique: true })
+@Index('manager_pkey', ['managerId'], { unique: true })
+@Entity('manager', { schema: 'public' })
 export class Manager {
-  @PrimaryGeneratedColumn({ type: "bigint", name: "manager_id" })
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'manager_id' })
   managerId: string;
 
-  @Column("character varying", {
-    name: "manager_email",
+  @Column('character varying', {
+    name: 'manager_email',
     unique: true,
     length: 255,
   })
   managerEmail: string;
 
-  @Column("boolean", { name: "is_deleted", default: () => "false" })
+  @Column('boolean', { name: 'is_deleted', default: () => 'false' })
   isDeleted: boolean;
 
-  @Column("timestamp without time zone", {
-    name: "created_at",
-    default: () => "CURRENT_TIMESTAMP",
+  @Column('timestamp without time zone', {
+    name: 'created_at',
+    default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt: Date;
 
-  @Column("timestamp without time zone", { name: "updated_at", nullable: true })
+  @Column('timestamp without time zone', { name: 'updated_at', nullable: true })
   updatedAt: Date | null;
 
-  @Column("character varying", { name: "phone_no", nullable: true, length: 15 })
+  @Column('character varying', { name: 'phone_no', nullable: true, length: 15 })
   phoneNo: string | null;
 
-  @Column("text", { name: "first_name", nullable: true })
+  @Column('text', { name: 'first_name', nullable: true })
   firstName: string | null;
 
-  @Column("text", { name: "middle_name", nullable: true })
+  @Column('text', { name: 'middle_name', nullable: true })
   middleName: string | null;
 
-  @Column("text", { name: "last_name", nullable: true })
+  @Column('text', { name: 'last_name', nullable: true })
   lastName: string | null;
 
-  @Column("text", { name: "logo_s3key", nullable: true })
+  @Column('text', { name: 'logo_s3key', nullable: true })
   logoS3key: string | null;
-
 
   @OneToMany(
     () => CandidateVerification,
-    (candidateVerification) => candidateVerification.manager
+    (candidateVerification) => candidateVerification.manager,
   )
   candidateVerifications: CandidateVerification[];
 
   @OneToMany(() => Interview, (interview) => interview.manager)
   interviews: Interview[];
 
-  @Column("text", { name: "company", nullable: true })  
+  @Column('text', { name: 'company', nullable: true })
   company: string | null;
 
   @OneToMany(
     () => JobShortlistedProfiles,
-    (jobShortlistedProfiles) => jobShortlistedProfiles.manager
+    (jobShortlistedProfiles) => jobShortlistedProfiles.manager,
   )
   jobShortlistedProfiles: JobShortlistedProfiles[];
 
@@ -77,6 +77,6 @@ export class Manager {
   jobs: Jobs[];
 
   @ManyToOne(() => Login, (login) => login.managers)
-  @JoinColumn([{ name: "login_id", referencedColumnName: "loginId" }])
+  @JoinColumn([{ name: 'login_id', referencedColumnName: 'loginId' }])
   login: Login;
 }
