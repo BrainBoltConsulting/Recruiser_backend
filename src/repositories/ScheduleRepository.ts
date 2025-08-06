@@ -1,12 +1,12 @@
 
-import { Repository } from 'typeorm';
-import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+
+import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { Schedule } from '../entities/Schedule';
 
 @CustomRepository(Schedule)
 export class ScheduleRepository extends Repository<Schedule> {
-
   async findByName(name: string): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
       .where('schedule.name = :name', { name })
@@ -43,7 +43,10 @@ export class ScheduleRepository extends Repository<Schedule> {
       .getMany();
   }
 
-  async findByCandidateAndJobId(candidateId: string, jobId: string): Promise<Schedule | null> {
+  async findByCandidateAndJobId(
+    candidateId: string,
+    jobId: string,
+  ): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
       .where('schedule.candidateId = :candidateId', { candidateId })
       .andWhere('schedule.jobId = :jobId', { jobId })
@@ -58,4 +61,20 @@ export class ScheduleRepository extends Repository<Schedule> {
       .leftJoinAndSelect('job.manager', 'manager')
       .getOne();
   }
-} 
+
+  async findByManagerIdAndDateRange(
+    managerId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<Schedule[]> {
+    return this.createQueryBuilder('schedule')
+      .leftJoinAndSelect('schedule.job', 'job')
+      .leftJoinAndSelect('job.manager', 'manager')
+      .where('manager.managerId = :managerId', { managerId })
+      .andWhere('schedule.scheduledDatetime BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .getMany();
+  }
+}

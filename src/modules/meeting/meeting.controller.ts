@@ -16,11 +16,13 @@ import { ApiTags } from '@nestjs/swagger';
 
 import { ApiFile } from '../../decorators/swagger.decorator';
 import { FileSizeGuard } from '../../guards/file-size.guard';
+import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
+import { GetManagerReportDto } from './dtos/manager-report-request.dto';
+import type { ManagerReportResponseDto } from './dtos/manager-report-response.dto';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
 import { MeetingService } from './meeting.service';
-import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 
 @Controller('meetings')
 @ApiTags('meetings')
@@ -85,9 +87,11 @@ export class MeetingController {
   async sendInvitationToCandidate(
     @Param('scheduleId') scheduleId: string,
     @Body() inviteToInterviewDto: InviteToInterviewDto,
-
   ) {
-    return this.meetingService.sendInvitionToCandidate(scheduleId, inviteToInterviewDto);
+    return this.meetingService.sendInvitionToCandidate(
+      scheduleId,
+      inviteToInterviewDto,
+    );
   }
 
   // tmp solution
@@ -139,17 +143,45 @@ export class MeetingController {
   async uploadMultipartChunk(
     @Param('scheduleId') scheduleId: string,
     @UploadedFile() chunk: Express.Multer.File,
-    @Body() body: { uploadId: string, partNumber: number, s3Key: string }
+    @Body() body: { uploadId: string; partNumber: number; s3Key: string },
   ) {
-    return this.meetingService.uploadMultipartChunk(scheduleId, body.s3Key, chunk, body.uploadId, body.partNumber);
+    return this.meetingService.uploadMultipartChunk(
+      scheduleId,
+      body.s3Key,
+      chunk,
+      body.uploadId,
+      body.partNumber,
+    );
   }
-  
+
   @Post('/schedule/:scheduleId/interview-multipart-complete')
   @HttpCode(HttpStatus.OK)
   async completeMultipartUpload(
     @Param('scheduleId') scheduleId: string,
-    @Body() body: { uploadId: string, parts: { ETag: string, PartNumber: number }[], s3Key: string }
+    @Body()
+    body: {
+      uploadId: string;
+      parts: Array<{ ETag: string; PartNumber: number }>;
+      s3Key: string;
+    },
   ) {
-    return this.meetingService.completeMultipartUpload(scheduleId, body.s3Key, body.uploadId, body.parts);
+    return this.meetingService.completeMultipartUpload(
+      scheduleId,
+      body.s3Key,
+      body.uploadId,
+      body.parts,
+    );
+  }
+
+  @Get('/manager/:managerId/report')
+  @HttpCode(HttpStatus.OK)
+  async getManagerInterviewReport(
+    @Param('managerId') managerId: string,
+    @Query() getManagerReportDto: GetManagerReportDto,
+  ): Promise<ManagerReportResponseDto> {
+    return this.meetingService.getManagerInterviewReport(
+      getManagerReportDto,
+      managerId,
+    );
   }
 }

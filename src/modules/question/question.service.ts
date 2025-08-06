@@ -44,10 +44,11 @@ export class QuestionService {
     const questionEntityToSave = await this.questionsRepository.save(
       this.questionsRepository.create({
         difficultyLevel: createQuestionDto.difficulty,
-        questionLevel: createQuestionDto.level,
+        questionLevel: null, // temporary solution  TODO: add level
         timeToAnswer: createQuestionDto.timeToAnswer,
         primarySkillId: primarySkillEntity.skillId,
         questionText: createQuestionDto.question,
+        subTech: 'Core',
       }),
     );
 
@@ -136,7 +137,7 @@ export class QuestionService {
       .map((question) => question.questionLevel.toString())
       .filter(
         (id, i, arr) =>
-          !allSelected.find((question) => question.questionId === id) &&
+          !allSelected.some((question) => question.questionId === id) &&
           arr.indexOf(id) === i,
       );
 
@@ -154,33 +155,39 @@ export class QuestionService {
     questions: Questions[],
     orderedSkillIds: number[],
   ): Questions[] {
-    const questionMap = new Map<number, Questions>();
+    const { childMap, skillGroups } = this.buildQuestionMaps(questions);
+
+    return this.buildSortedResult(orderedSkillIds, skillGroups, childMap);
+  }
+
+  private buildQuestionMaps(questions: Questions[]) {
     const childMap = new Map<number, Questions[]>();
+    const skillGroups = new Map<number, Questions[]>();
 
     for (const q of questions) {
-      questionMap.set(Number(q.questionId), q);
-
       if (q.questionLevel) {
         if (!childMap.has(q.questionLevel)) {
           childMap.set(q.questionLevel, []);
         }
 
         childMap.get(q.questionLevel)!.push(q);
-      }
-    }
+      } else {
+        if (!skillGroups.has(q.primarySkillId)) {
+          skillGroups.set(q.primarySkillId, []);
+        }
 
-    const skillGroups = new Map<number, Questions[]>();
-
-    for (const q of questions) {
-      if (!skillGroups.has(q.primarySkillId)) {
-        skillGroups.set(q.primarySkillId, []);
-      }
-
-      if (!q.questionLevel) {
         skillGroups.get(q.primarySkillId)!.push(q);
       }
     }
 
+    return { childMap, skillGroups };
+  }
+
+  private buildSortedResult(
+    orderedSkillIds: number[],
+    skillGroups: Map<number, Questions[]>,
+    childMap: Map<number, Questions[]>,
+  ): Questions[] {
     const sortedResult: Questions[] = [];
 
     for (const skillId of orderedSkillIds) {

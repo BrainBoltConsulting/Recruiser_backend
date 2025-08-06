@@ -1,3 +1,4 @@
+/* eslint-disable sonarjs/cognitive-complexity */
 import {
   BadRequestException,
   Injectable,
@@ -6,8 +7,16 @@ import {
 } from '@nestjs/common';
 import { Transactional } from 'typeorm-transactional';
 
+import { LogCategory } from '../../constants/logger-type.enum';
 import { MessageTypeEnum } from '../../constants/message.enum';
+import {
+  DAY_NAMES,
+  REPORT_BREAKDOWNS,
+  TIME_CONSTANTS,
+} from '../../constants/report.constant';
+import { ReportFilterType } from '../../constants/report-type.enum';
 import type { Interview } from '../../entities/Interview';
+import type { Schedule } from '../../entities/Schedule';
 import { UtilsProvider } from '../../providers/utils.provider';
 import { CandidateRepository } from '../../repositories/CandidateRepository';
 import { ConfigRepository } from '../../repositories/ConfigRepository';
@@ -19,16 +28,17 @@ import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { PollyService } from '../../shared/services/aws-polly.service';
 import { S3Service } from '../../shared/services/aws-s3.service';
+import { EnhancedLoggerService } from '../../shared/services/enhanced-logger.service';
 import { MailService } from '../../shared/services/mail.service';
 import { SlackNotificationService } from '../../shared/services/slack-notification.service';
-import { EnhancedLoggerService } from '../../shared/services/enhanced-logger.service';
-import { LogCategory } from '../../constants/logger-type.enum';
 import { QuestionService } from '../question/question.service';
+import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
+import type { GetManagerReportDto } from './dtos/manager-report-request.dto';
+import { ManagerReportResponseDto } from './dtos/manager-report-response.dto';
+import type { ReportPartDto } from './dtos/report-part.dto';
 import type { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
-import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
-import { Schedule } from '../../entities/Schedule';
 
 @Injectable()
 export class MeetingService {
@@ -126,16 +136,13 @@ export class MeetingService {
 
     const context = { scheduleId };
 
-    this.enhancedLogger.interviewEvent(
-      '🚀 Attempting to start interview',
-      { 
-        ...context, 
-        metadata: { 
-          browserName: startInterviewDto.browserName,
-          timestamp: new Date().toISOString()
-        } 
+    this.enhancedLogger.interviewEvent('🚀 Attempting to start interview', {
+      ...context,
+      metadata: {
+        browserName: startInterviewDto.browserName,
+        timestamp: new Date().toISOString(),
       },
-    );
+    });
 
     this.enhancedLogger.startTimer(`db-fetch-schedule-${scheduleId}`);
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
@@ -143,18 +150,20 @@ export class MeetingService {
       `db-fetch-schedule-${scheduleId}`,
       LogCategory.DATABASE,
       'Schedule entity retrieved for interview start',
-      { 
+      {
         scheduleId: scheduleEntity.scheduleId,
         candidateId: scheduleEntity.candidateId.toString(),
-        metadata: { 
+        metadata: {
           jobId: scheduleEntity.jobId,
           scheduledDateTime: scheduleEntity.scheduledDatetime,
-          attendedDateTime: scheduleEntity.attendedDatetime
-        }
-      }
-         );
+          attendedDateTime: scheduleEntity.attendedDatetime,
+        },
+      },
+    );
 
-    this.enhancedLogger.startTimer(`db-check-existing-interview-${scheduleEntity.candidateId}`);
+    this.enhancedLogger.startTimer(
+      `db-check-existing-interview-${scheduleEntity.candidateId}`,
+    );
     const interviewEntityByCandidateId =
       await this.interviewRepository.findByCandidateIdExtended(
         scheduleEntity.candidateId,
@@ -167,10 +176,10 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         scheduleId,
         metadata: {
-          existingInterview: !!interviewEntityByCandidateId,
-          alreadyAttended: !!scheduleEntity.attendedDatetime
-        }
-      }
+          existingInterview: Boolean(interviewEntityByCandidateId),
+          alreadyAttended: Boolean(scheduleEntity.attendedDatetime),
+        },
+      },
     );
 
     if (interviewEntityByCandidateId || scheduleEntity.attendedDatetime) {
@@ -183,10 +192,10 @@ export class MeetingService {
           metadata: {
             existingInterviewId: interviewEntityByCandidateId?.interviewId,
             attendedDateTime: scheduleEntity.attendedDatetime,
-            reason: 'duplicate_interview_attempt'
-          }
+            reason: 'duplicate_interview_attempt',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
 
       throw new BadRequestException(
@@ -196,20 +205,20 @@ export class MeetingService {
 
     const now = new Date();
     const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
-    
-    this.enhancedLogger.startTimer(`db-fetch-expiry-config`);
+
+    this.enhancedLogger.startTimer('db-fetch-expiry-config');
     const meetingLinkExpiryConfig =
       await this.configRepository.getMeetingLinkExpiryValue();
     this.enhancedLogger.endTimer(
-      `db-fetch-expiry-config`,
+      'db-fetch-expiry-config',
       LogCategory.DATABASE,
       'Meeting expiry configuration retrieved',
       {
         scheduleId,
         metadata: {
-          expiryHours: meetingLinkExpiryConfig?.configValue
-        }
-      }
+          expiryHours: meetingLinkExpiryConfig?.configValue,
+        },
+      },
     );
 
     if (!meetingLinkExpiryConfig) {
@@ -217,8 +226,9 @@ export class MeetingService {
         LogCategory.SYSTEM,
         '⚙️ Meeting link expiry configuration not found',
         { scheduleId },
-        'MeetingService'
+        'MeetingService',
       );
+
       throw new BadRequestException('Meeting link expiry config is not found');
     }
 
@@ -235,10 +245,11 @@ export class MeetingService {
           scheduledTime: scheduledDate.toISOString(),
           hoursDifference: hoursDifference.toFixed(2),
           maxAllowedHours: Number(meetingLinkExpiryConfig.configValue),
-          isWithinTimeLimit: hoursDifference <= Number(meetingLinkExpiryConfig.configValue)
-        }
+          isWithinTimeLimit:
+            hoursDifference <= Number(meetingLinkExpiryConfig.configValue),
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
@@ -250,11 +261,13 @@ export class MeetingService {
           metadata: {
             hoursDifference: hoursDifference.toFixed(2),
             maxAllowedHours: Number(meetingLinkExpiryConfig.configValue),
-            hoursOverdue: (hoursDifference - Number(meetingLinkExpiryConfig.configValue)).toFixed(2),
-            reason: 'time_window_expired'
-          }
+            hoursOverdue: (
+              hoursDifference - Number(meetingLinkExpiryConfig.configValue)
+            ).toFixed(2),
+            reason: 'time_window_expired',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
 
       throw new BadRequestException(
@@ -264,7 +277,9 @@ export class MeetingService {
       );
     }
 
-    this.enhancedLogger.startTimer(`db-create-interview-${scheduleEntity.candidateId}`);
+    this.enhancedLogger.startTimer(
+      `db-create-interview-${scheduleEntity.candidateId}`,
+    );
     this.enhancedLogger.info(
       LogCategory.DATABASE,
       '💾 Creating new interview entity',
@@ -273,10 +288,10 @@ export class MeetingService {
         scheduleId,
         metadata: {
           browserName: startInterviewDto.browserName,
-          interviewDate: now.toISOString()
-        }
+          interviewDate: now.toISOString(),
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     const interviewEntity = await this.interviewRepository.save(
@@ -294,9 +309,9 @@ export class MeetingService {
       {
         interviewId: interviewEntity.interviewId.toString(),
         candidateId: scheduleEntity.candidateId.toString(),
-        scheduleId
-      }
-         );
+        scheduleId,
+      },
+    );
 
     this.enhancedLogger.startTimer(`db-update-schedule-${scheduleId}`);
     await this.scheduleRepository.update(scheduleId, { attendedDatetime: now });
@@ -307,20 +322,23 @@ export class MeetingService {
       {
         scheduleId,
         metadata: {
-          attendedDateTime: now.toISOString()
-        }
-      }
-         );
+          attendedDateTime: now.toISOString(),
+        },
+      },
+    );
 
     this.enhancedLogger.startTimer(`s3-init-upload-${scheduleId}`);
-    this.enhancedLogger.uploadEvent('Initializing multipart upload for interview recording', {
-      scheduleId,
-      interviewId: interviewEntity.interviewId.toString(),
-      candidateId: scheduleEntity.candidateId.toString()
-    });
+    this.enhancedLogger.uploadEvent(
+      'Initializing multipart upload for interview recording',
+      {
+        scheduleId,
+        interviewId: interviewEntity.interviewId.toString(),
+        candidateId: scheduleEntity.candidateId.toString(),
+      },
+    );
 
     const { uploadId, s3Key } = await this.initiateMultipartUpload(scheduleId);
-    
+
     this.enhancedLogger.endTimer(
       `s3-init-upload-${scheduleId}`,
       LogCategory.UPLOAD,
@@ -330,10 +348,10 @@ export class MeetingService {
         interviewId: interviewEntity.interviewId.toString(),
         metadata: {
           uploadId,
-          s3Key
-        }
-             }
-     );
+          s3Key,
+        },
+      },
+    );
 
     const totalDuration = this.enhancedLogger.endTimer(
       `start-interview-${scheduleId}`,
@@ -347,14 +365,16 @@ export class MeetingService {
           browserName: startInterviewDto.browserName,
           uploadId,
           s3Key,
-          totalDbOperations: 5
-        }
-      }
+          totalDbOperations: 5,
+        },
+      },
     );
 
     this.enhancedLogger.success(
       LogCategory.INTERVIEW,
-      `🎉 Interview started successfully! Total setup time: ${totalDuration.toFixed(2)}ms`,
+      `🎉 Interview started successfully! Total setup time: ${totalDuration.toFixed(
+        2,
+      )}ms`,
       {
         interviewId: interviewEntity.interviewId.toString(),
         candidateId: scheduleEntity.candidateId.toString(),
@@ -362,10 +382,10 @@ export class MeetingService {
         duration: totalDuration,
         metadata: {
           browserName: startInterviewDto.browserName,
-          readyForRecording: true
-        }
+          readyForRecording: true,
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     return { ...interviewEntity, uploadId, s3Key };
@@ -381,10 +401,13 @@ export class MeetingService {
 
     const context = { scheduleId };
 
-    this.enhancedLogger.interviewEvent(
-      '🏁 Starting interview finish process',
-      { ...context, metadata: { isFinishedEarlier: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier } },
-    );
+    this.enhancedLogger.interviewEvent('🏁 Starting interview finish process', {
+      ...context,
+      metadata: {
+        isFinishedEarlier:
+          isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
+      },
+    });
 
     this.enhancedLogger.startTimer(`db-fetch-schedule-${scheduleId}`);
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
@@ -392,29 +415,31 @@ export class MeetingService {
       `db-fetch-schedule-${scheduleId}`,
       LogCategory.DATABASE,
       'Schedule entity retrieved',
-      { 
+      {
         scheduleId: scheduleEntity.scheduleId,
         candidateId: scheduleEntity.candidateId.toString(),
-        metadata: { jobId: scheduleEntity.jobId }
-      }
+        metadata: { jobId: scheduleEntity.jobId },
+      },
     );
 
     const candidate = scheduleEntity.candidate;
     this.enhancedLogger.info(
       LogCategory.INTERVIEW,
       `👤 Processing candidate: ${candidate.firstName} ${candidate.lastName}`,
-      { 
+      {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
-        metadata: { 
+        metadata: {
           email: candidate.email,
-          phone: candidate.phoneNo 
-        }
+          phone: candidate.phoneNo,
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
-    this.enhancedLogger.startTimer(`db-fetch-interview-${candidate.candidateId}`);
+    this.enhancedLogger.startTimer(
+      `db-fetch-interview-${candidate.candidateId}`,
+    );
     const interviewEntityByCandidateId =
       await this.interviewRepository.findByCandidateIdExtended(
         candidate.candidateId,
@@ -429,10 +454,11 @@ export class MeetingService {
         scheduleId,
         metadata: {
           browser: interviewEntityByCandidateId.browserName,
-          evaluationsCount: interviewEntityByCandidateId.evaluations?.length || 0,
-          dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0
-        }
-      }
+          evaluationsCount:
+            interviewEntityByCandidateId.evaluations?.length || 0,
+          dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0,
+        },
+      },
     );
 
     const interviewEntityUpdate: Partial<Interview> = {};
@@ -445,9 +471,9 @@ export class MeetingService {
         {
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
-          scheduleId
+          scheduleId,
         },
-        'MeetingService'
+        'MeetingService',
       );
     }
 
@@ -457,20 +483,22 @@ export class MeetingService {
     // interviewEntityUpdate.videofileS3key = s3Uri;
 
     if (Object.values(interviewEntityUpdate).length > 0) {
-      this.enhancedLogger.startTimer(`db-update-interview-${interviewEntityByCandidateId.interviewId}`);
+      this.enhancedLogger.startTimer(
+        `db-update-interview-${interviewEntityByCandidateId.interviewId}`,
+      );
       this.enhancedLogger.info(
         LogCategory.DATABASE,
-        `💾 Updating interview entity`,
+        '💾 Updating interview entity',
         {
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
           scheduleId,
-          metadata: { 
+          metadata: {
             fieldsToUpdate: Object.keys(interviewEntityUpdate),
-            updateData: interviewEntityUpdate
-          }
+            updateData: interviewEntityUpdate,
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
 
       await this.interviewRepository.update(
@@ -485,8 +513,8 @@ export class MeetingService {
         {
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
-          scheduleId
-        }
+          scheduleId,
+        },
       );
     } else {
       this.enhancedLogger.info(
@@ -495,9 +523,9 @@ export class MeetingService {
         {
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
-          scheduleId
+          scheduleId,
         },
-        'MeetingService'
+        'MeetingService',
       );
     }
 
@@ -512,10 +540,11 @@ export class MeetingService {
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
           browser: interviewEntityByCandidateId.browserName,
           finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-          evaluationsCount: interviewEntityByCandidateId.evaluations?.length || 0,
-          dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0
-        }
-      }
+          evaluationsCount:
+            interviewEntityByCandidateId.evaluations?.length || 0,
+          dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0,
+        },
+      },
     );
 
     this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
@@ -543,8 +572,8 @@ export class MeetingService {
       {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         candidateId: candidate.candidateId.toString(),
-        scheduleId
-      }
+        scheduleId,
+      },
     );
 
     const totalDuration = this.enhancedLogger.endTimer(
@@ -558,21 +587,24 @@ export class MeetingService {
         metadata: {
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
           finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-          totalOperations: Object.keys(interviewEntityUpdate).length > 0 ? 4 : 3 // DB queries + optional update + Slack
-        }
-      }
+          totalOperations:
+            Object.keys(interviewEntityUpdate).length > 0 ? 4 : 3, // DB queries + optional update + Slack
+        },
+      },
     );
 
     this.enhancedLogger.success(
       LogCategory.INTERVIEW,
-      `🎉 Interview finished successfully! Total processing time: ${totalDuration.toFixed(2)}ms`,
+      `🎉 Interview finished successfully! Total processing time: ${totalDuration.toFixed(
+        2,
+      )}ms`,
       {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         candidateId: candidate.candidateId.toString(),
         scheduleId,
-        duration: totalDuration
+        duration: totalDuration,
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     return UtilsProvider.getMessageOverviewByType(
@@ -586,21 +618,23 @@ export class MeetingService {
     questionId: string,
   ) {
     this.enhancedLogger.logSeparator('SAVE INTERVIEW RECORDING');
-    this.enhancedLogger.startTimer(`save-recording-${scheduleId}-${questionId}`);
+    this.enhancedLogger.startTimer(
+      `save-recording-${scheduleId}-${questionId}`,
+    );
 
     const context = { scheduleId };
 
     this.enhancedLogger.uploadEvent(
       '📹 Starting video recording save process',
-      { 
-        ...context, 
-        metadata: { 
+      {
+        ...context,
+        metadata: {
           questionId,
           fileName: file.originalname,
           fileSize: file.size,
           mimeType: file.mimetype,
-          timestamp: new Date().toISOString()
-        } 
+          timestamp: new Date().toISOString(),
+        },
       },
     );
 
@@ -610,29 +644,29 @@ export class MeetingService {
       `db-fetch-schedule-${scheduleId}`,
       LogCategory.DATABASE,
       'Schedule entity retrieved for recording save',
-      { 
+      {
         scheduleId: scheduleEntity.scheduleId,
         candidateId: scheduleEntity.candidateId.toString(),
-        metadata: { 
-          jobId: scheduleEntity.jobId
-        }
-      }
+        metadata: {
+          jobId: scheduleEntity.jobId,
+        },
+      },
     );
 
     const candidate = scheduleEntity.candidate;
     this.enhancedLogger.info(
       LogCategory.UPLOAD,
       `📤 Processing recording for candidate: ${candidate.firstName} ${candidate.lastName}`,
-      { 
+      {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
-        metadata: { 
+        metadata: {
           questionId,
-          email: candidate.email
-        }
+          email: candidate.email,
+        },
       },
-      'MeetingService'
-         );
+      'MeetingService',
+    );
 
     const fileName = `SId-${scheduleId}-QId-${questionId}-CId-${
       candidate.candidateId
@@ -648,11 +682,11 @@ export class MeetingService {
           questionId,
           generatedFileName: fileName,
           originalFileName: file.originalname,
-          fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`
-        }
+          fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+        },
       },
-      'MeetingService'
-         );
+      'MeetingService',
+    );
 
     this.enhancedLogger.startTimer(`s3-upload-${scheduleId}-${questionId}`);
     this.enhancedLogger.uploadEvent('Uploading video file to S3', {
@@ -662,8 +696,8 @@ export class MeetingService {
         questionId,
         fileName,
         bucket: 'VideoInterviewFiles',
-        fileSize: file.size
-      }
+        fileSize: file.size,
+      },
     });
 
     const responseFromS3 = await this.s3Service.uploadFile(
@@ -684,9 +718,9 @@ export class MeetingService {
           s3Bucket: responseFromS3.Bucket,
           s3Key: responseFromS3.Key,
           s3Location: responseFromS3.Location,
-          fileSize: file.size
-        }
-      }
+          fileSize: file.size,
+        },
+      },
     );
 
     const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(
@@ -702,22 +736,24 @@ export class MeetingService {
         scheduleId,
         metadata: {
           questionId,
-                   s3Uri: s3Uri.substring(0, 100) + '...' // Truncate for logging
-       }
-     },
-       'MeetingService'
-     );
+          s3Uri: s3Uri.slice(0, 100) + '...', // Truncate for logging
+        },
+      },
+      'MeetingService',
+    );
 
-    this.enhancedLogger.startTimer(`db-fetch-interview-${candidate.candidateId}`);
+    this.enhancedLogger.startTimer(
+      `db-fetch-interview-${candidate.candidateId}`,
+    );
     this.enhancedLogger.debug(
       LogCategory.DATABASE,
       '🔍 Fetching interview entity for evaluation creation',
       {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
-        metadata: { questionId }
+        metadata: { questionId },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     const interviewEntityByCandidateId =
@@ -733,9 +769,9 @@ export class MeetingService {
         interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
         metadata: {
           questionId,
-          interviewFound: !!interviewEntityByCandidateId
-        }
-      }
+          interviewFound: Boolean(interviewEntityByCandidateId),
+        },
+      },
     );
 
     if (!interviewEntityByCandidateId) {
@@ -747,12 +783,12 @@ export class MeetingService {
           scheduleId,
           metadata: {
             questionId,
-            reason: 'interview_not_found'
-          }
+            reason: 'interview_not_found',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
-         }
+    }
 
     this.enhancedLogger.startTimer(`db-create-evaluation-${questionId}`);
     this.enhancedLogger.info(
@@ -764,10 +800,10 @@ export class MeetingService {
         interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
         metadata: {
           questionId,
-          videoS3Uri: s3Uri.substring(0, 50) + '...'
-        }
+          videoS3Uri: s3Uri.slice(0, 50) + '...',
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     const evaluationEntity = await this.evaluationRepository.save(
@@ -789,10 +825,10 @@ export class MeetingService {
         metadata: {
           evaluationId: evaluationEntity.evaluationId,
           questionId,
-          videoStored: true
-        }
-             }
-     );
+          videoStored: true,
+        },
+      },
+    );
 
     const totalDuration = this.enhancedLogger.endTimer(
       `save-recording-${scheduleId}-${questionId}`,
@@ -806,14 +842,16 @@ export class MeetingService {
           questionId,
           evaluationId: evaluationEntity.evaluationId,
           fileSize: file.size,
-          s3Location: responseFromS3.Location
-        }
-      }
+          s3Location: responseFromS3.Location,
+        },
+      },
     );
 
     this.enhancedLogger.success(
       LogCategory.UPLOAD,
-      `🎉 Video recording saved successfully! Total processing time: ${totalDuration.toFixed(2)}ms`,
+      `🎉 Video recording saved successfully! Total processing time: ${totalDuration.toFixed(
+        2,
+      )}ms`,
       {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
@@ -823,10 +861,10 @@ export class MeetingService {
           questionId,
           evaluationId: evaluationEntity.evaluationId,
           fileSizeMB: (file.size / 1024 / 1024).toFixed(2),
-          uploadSuccess: true
-        }
+          uploadSuccess: true,
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     return evaluationEntity;
@@ -845,16 +883,16 @@ export class MeetingService {
     this.enhancedLogger.warn(
       LogCategory.INTERVIEW,
       '🚨 CHEAT DETECTION: Suspicious behavior detected during interview',
-      { 
-        ...context, 
-        metadata: { 
+      {
+        ...context,
+        metadata: {
           questionId,
           detectionType: 'tab_switch',
           timestamp: new Date().toISOString(),
-          severity: 'moderate'
-        } 
+          severity: 'moderate',
+        },
       },
-      'CheatDetectionService'
+      'CheatDetectionService',
     );
 
     this.enhancedLogger.startTimer(`db-fetch-schedule-${scheduleId}`);
@@ -863,34 +901,36 @@ export class MeetingService {
       `db-fetch-schedule-${scheduleId}`,
       LogCategory.DATABASE,
       'Schedule entity retrieved for cheat logging',
-      { 
+      {
         scheduleId: scheduleEntity.scheduleId,
         candidateId: scheduleEntity.candidateId.toString(),
-        metadata: { 
+        metadata: {
           jobId: scheduleEntity.jobId,
-          questionId
-        }
-      }
+          questionId,
+        },
+      },
     );
 
     const candidate = scheduleEntity.candidate;
     this.enhancedLogger.warn(
       LogCategory.INTERVIEW,
       `⚠️ Cheat detected for candidate: ${candidate.firstName} ${candidate.lastName}`,
-      { 
+      {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
-        metadata: { 
+        metadata: {
           questionId,
           email: candidate.email,
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
-          cheatType: 'tab_switch'
-        }
+          cheatType: 'tab_switch',
+        },
       },
-             'MeetingService'
-     );
+      'MeetingService',
+    );
 
-    this.enhancedLogger.startTimer(`db-fetch-interview-${candidate.candidateId}`);
+    this.enhancedLogger.startTimer(
+      `db-fetch-interview-${candidate.candidateId}`,
+    );
     const interviewEntityByCandidateId =
       await this.interviewRepository.findByCandidateId(candidate.candidateId); // tmp solution
     this.enhancedLogger.endTimer(
@@ -903,9 +943,9 @@ export class MeetingService {
         interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
         metadata: {
           questionId,
-          interviewFound: !!interviewEntityByCandidateId
-        }
-      }
+          interviewFound: Boolean(interviewEntityByCandidateId),
+        },
+      },
     );
 
     if (!interviewEntityByCandidateId) {
@@ -918,15 +958,18 @@ export class MeetingService {
           metadata: {
             questionId,
             reason: 'interview_not_found',
-            cheatType: 'tab_switch'
-          }
+            cheatType: 'tab_switch',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
+
       throw new BadRequestException('Interview not found for candidate');
     }
 
-    this.enhancedLogger.startTimer(`db-fetch-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`);
+    this.enhancedLogger.startTimer(
+      `db-fetch-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
+    );
     this.enhancedLogger.debug(
       LogCategory.DATABASE,
       '🔍 Checking for existing dishonest behavior records',
@@ -936,10 +979,10 @@ export class MeetingService {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         metadata: {
           questionId,
-          lookupType: 'existing_cheat_record'
-        }
+          lookupType: 'existing_cheat_record',
+        },
       },
-      'MeetingService'
+      'MeetingService',
     );
 
     const findDishonestEntityByQUestionAndInterviewId =
@@ -958,14 +1001,26 @@ export class MeetingService {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         metadata: {
           questionId,
-          existingRecord: !!findDishonestEntityByQUestionAndInterviewId,
-          currentSwitchCount: findDishonestEntityByQUestionAndInterviewId?.switchCount || 0
-        }
-      }
+          existingRecord: Boolean(findDishonestEntityByQUestionAndInterviewId),
+          currentSwitchCount:
+            findDishonestEntityByQUestionAndInterviewId?.switchCount || 0,
+        },
+      },
     );
 
     const switchCount =
-      (Number(findDishonestEntityByQUestionAndInterviewId?.switchCount) || 0) + 1;
+      (Number(findDishonestEntityByQUestionAndInterviewId?.switchCount) || 0) +
+      1;
+
+    let severity: string;
+
+    if (switchCount >= 3) {
+      severity = 'high';
+    } else if (switchCount >= 2) {
+      severity = 'medium';
+    } else {
+      severity = 'low';
+    }
 
     this.enhancedLogger.warn(
       LogCategory.INTERVIEW,
@@ -976,19 +1031,22 @@ export class MeetingService {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         metadata: {
           questionId,
-          previousCount: findDishonestEntityByQUestionAndInterviewId?.switchCount || 0,
+          previousCount:
+            findDishonestEntityByQUestionAndInterviewId?.switchCount || 0,
           newCount: switchCount,
           increment: 1,
-          severity: switchCount >= 3 ? 'high' : switchCount >= 2 ? 'medium' : 'low'
-        }
+          severity,
+        },
       },
-      'MeetingService'
-         );
+      'MeetingService',
+    );
 
-    this.enhancedLogger.startTimer(`db-save-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`);
-    
+    this.enhancedLogger.startTimer(
+      `db-save-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
+    );
+
     const isNewRecord = !findDishonestEntityByQUestionAndInterviewId;
-    
+
     if (isNewRecord) {
       this.enhancedLogger.info(
         LogCategory.DATABASE,
@@ -1000,10 +1058,10 @@ export class MeetingService {
           metadata: {
             questionId,
             switchCount,
-            recordType: 'new_cheat_record'
-          }
+            recordType: 'new_cheat_record',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
     } else {
       this.enhancedLogger.info(
@@ -1015,12 +1073,13 @@ export class MeetingService {
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           metadata: {
             questionId,
-            oldSwitchCount: findDishonestEntityByQUestionAndInterviewId.switchCount,
+            oldSwitchCount:
+              findDishonestEntityByQUestionAndInterviewId.switchCount,
             newSwitchCount: switchCount,
-            recordType: 'update_cheat_record'
-          }
+            recordType: 'update_cheat_record',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
     }
 
@@ -1041,7 +1100,9 @@ export class MeetingService {
     this.enhancedLogger.endTimer(
       `db-save-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
       LogCategory.DATABASE,
-      `Dishonest behavior record ${isNewRecord ? 'created' : 'updated'} successfully`,
+      `Dishonest behavior record ${
+        isNewRecord ? 'created' : 'updated'
+      } successfully`,
       {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
@@ -1049,10 +1110,10 @@ export class MeetingService {
         metadata: {
           questionId,
           finalSwitchCount: switchCount,
-          operation: isNewRecord ? 'create' : 'update'
-        }
-             }
-     );
+          operation: isNewRecord ? 'create' : 'update',
+        },
+      },
+    );
 
     const totalDuration = this.enhancedLogger.endTimer(
       `save-cheating-${scheduleId}-${questionId}`,
@@ -1066,10 +1127,10 @@ export class MeetingService {
           questionId,
           switchCount,
           cheatType: 'tab_switch',
-          operationType: isNewRecord ? 'new_record' : 'update_record'
-        }
-      }
-         );
+          operationType: isNewRecord ? 'new_record' : 'update_record',
+        },
+      },
+    );
 
     if (switchCount >= 3) {
       this.enhancedLogger.error(
@@ -1085,10 +1146,10 @@ export class MeetingService {
             switchCount,
             severity: 'high',
             candidateName: `${candidate.firstName} ${candidate.lastName}`,
-            recommendedAction: 'flag_for_review'
-          }
+            recommendedAction: 'flag_for_review',
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
     } else if (switchCount >= 2) {
       this.enhancedLogger.warn(
@@ -1103,15 +1164,17 @@ export class MeetingService {
             questionId,
             switchCount,
             severity: 'medium',
-            candidateName: `${candidate.firstName} ${candidate.lastName}`
-          }
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
     } else {
       this.enhancedLogger.info(
         LogCategory.INTERVIEW,
-        `ℹ️ Cheat detection logged successfully - Total processing: ${totalDuration.toFixed(2)}ms`,
+        `ℹ️ Cheat detection logged successfully - Total processing: ${totalDuration.toFixed(
+          2,
+        )}ms`,
         {
           candidateId: candidate.candidateId.toString(),
           scheduleId,
@@ -1121,10 +1184,10 @@ export class MeetingService {
             questionId,
             switchCount,
             severity: 'low',
-            cheatLogged: true
-          }
+            cheatLogged: true,
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
     }
 
@@ -1132,11 +1195,16 @@ export class MeetingService {
   }
 
   @Transactional()
-  async sendInvitionToCandidate(scheduleId: string, inviteToInterviewDto?: InviteToInterviewDto) {
+  async sendInvitionToCandidate(
+    scheduleId: string,
+    inviteToInterviewDto?: InviteToInterviewDto,
+  ) {
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
 
     if (scheduleEntity.attendedDatetime) {
-      throw new BadRequestException('Interview has already happened, can not move forward');
+      throw new BadRequestException(
+        'Interview has already happened, can not move forward',
+      );
     }
 
     const newMeetingLink = this.generateNewMeetingLink();
@@ -1144,17 +1212,23 @@ export class MeetingService {
 
     const updatedScheduleEntity: Partial<Schedule> = {
       meetingLink: newMeetingLink,
-    }
+    };
 
     if (inviteToInterviewDto) {
-      updatedScheduleEntity.scheduledDatetime = inviteToInterviewDto.scheduledDate;
+      updatedScheduleEntity.scheduledDatetime =
+        inviteToInterviewDto.scheduledDate;
     }
 
-    await this.scheduleRepository.update(scheduleEntity.scheduleId, updatedScheduleEntity);
+    await this.scheduleRepository.update(
+      scheduleEntity.scheduleId,
+      updatedScheduleEntity,
+    );
     await this.mailService.send({
       to: scheduleEntity.candidate.email,
-      subject: `${scheduleEntity.job.manager.company || 'Hire2o'} Invites You For An AI Interview `,
-      bcc: [ scheduleEntity.job.manager.managerEmail ],
+      subject: `${
+        scheduleEntity.job.manager.company || 'Hire2o'
+      } Invites You For An AI Interview `,
+      bcc: [scheduleEntity.job.manager.managerEmail],
       html: this.mailService.sendInvitationForAMeeting(
         scheduleEntity.candidate.firstName,
         scheduleEntity.job.manager,
@@ -1265,36 +1339,34 @@ export class MeetingService {
   async initiateMultipartUpload(scheduleId: string) {
     const s3Key = `Complete_Interview/${scheduleId}/interview_${Date.now()}.webm`;
     const res = await this.s3Service.createMultipartUpload(s3Key);
+
     return { uploadId: res.UploadId, s3Key };
   }
-  
+
   async uploadMultipartChunk(
     scheduleId: string,
     s3Key: string,
     chunk: Express.Multer.File,
     uploadId: string,
-    partNumber: number
+    partNumber: number,
   ) {
     const res = await this.s3Service.uploadPart(
       s3Key,
       uploadId,
       partNumber,
-      chunk.buffer
+      chunk.buffer,
     );
+
     return { ETag: res.ETag, PartNumber: partNumber };
   }
-  
+
   async completeMultipartUpload(
     scheduleId: string,
     s3Key: string,
     uploadId: string,
-    parts: { ETag: string, PartNumber: number }[]
+    parts: Array<{ ETag: string; PartNumber: number }>,
   ) {
-    const res = await this.s3Service.completeMultipartUpload(
-      s3Key,
-      uploadId,
-      parts
-    );
+    await this.s3Service.completeMultipartUpload(s3Key, uploadId, parts);
 
     return { success: true, s3Key };
   }
@@ -1304,5 +1376,365 @@ export class MeetingService {
     const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`;
 
     return fullPath;
+  }
+
+  async getManagerInterviewReport(
+    getManagerReportDto: GetManagerReportDto,
+    managerId: string,
+  ): Promise<ManagerReportResponseDto> {
+    const { startDate, endDate } = this.calculateDateRange(getManagerReportDto);
+    const filterType = this.determineFilterType(startDate, endDate);
+
+    const schedules = await this.scheduleRepository.findByManagerIdAndDateRange(
+      managerId,
+      startDate,
+      endDate,
+    );
+
+    const parts = this.generateReportParts(
+      schedules,
+      filterType,
+      startDate,
+      endDate,
+    );
+
+    return new ManagerReportResponseDto({
+      managerId,
+      filterType,
+      startDate,
+      endDate,
+      schedules,
+      parts,
+    });
+  }
+
+  private calculateDateRange(dto: GetManagerReportDto): {
+    startDate: Date;
+    endDate: Date;
+  } {
+    // Fix for timezone handling: Normalize all dates to UTC to ensure consistent
+    // database queries with 'timestamp without time zone' columns
+    // Parse the start date and normalize to start of day in UTC
+    const startDate = new Date(dto.startDate);
+    // Ensure we're working with the start of the day in UTC
+    startDate.setUTCHours(0, 0, 0, 0);
+
+    let endDate: Date;
+
+    if (dto.endDate) {
+      // If endDate is provided, use it
+      endDate = new Date(dto.endDate);
+      endDate.setUTCHours(23, 59, 59, 999);
+    } else {
+      // If no endDate provided, assume it's the same day
+      endDate = new Date(startDate);
+      endDate.setUTCHours(23, 59, 59, 999);
+    }
+
+    return { startDate, endDate };
+  }
+
+  private determineFilterType(
+    startDate: Date,
+    endDate: Date,
+  ): ReportFilterType {
+    // Check if it's a full year (Jan 1 to Dec 31 of same year)
+    if (
+      startDate.getUTCMonth() === 0 && // January
+      startDate.getUTCDate() === 1 && // 1st day
+      endDate.getUTCMonth() === 11 && // December
+      endDate.getUTCDate() === 31 && // 31st day
+      startDate.getUTCFullYear() === endDate.getUTCFullYear() // Same year
+    ) {
+      return ReportFilterType.YEAR;
+    }
+
+    // Check if it's a full month (1st to last day of same month)
+    if (
+      startDate.getUTCDate() === 1 && // First day of month
+      startDate.getUTCFullYear() === endDate.getUTCFullYear() && // Same year
+      startDate.getUTCMonth() === endDate.getUTCMonth() // Same month
+    ) {
+      const daysInMonth = new Date(
+        Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0),
+      ).getUTCDate();
+
+      if (endDate.getUTCDate() === daysInMonth) {
+        return ReportFilterType.MONTH;
+      }
+    }
+
+    // Check for exact week (7 days)
+    const diffInMs = endDate.getTime() - startDate.getTime();
+    const diffInDays = Math.round(diffInMs / (1000 * 60 * 60 * 24));
+
+    if (diffInDays === 6) {
+      // 6 days difference means 7 days total (inclusive)
+      return ReportFilterType.WEEK;
+    }
+
+    // Otherwise, it's custom
+
+    return ReportFilterType.CUSTOM;
+  }
+
+  private generateReportParts(
+    schedules: Schedule[],
+    filterType: ReportFilterType,
+    startDate: Date,
+    endDate: Date,
+  ): ReportPartDto[] {
+    const parts: ReportPartDto[] = [];
+
+    switch (filterType) {
+      case ReportFilterType.YEAR: {
+        const currentDate = new Date();
+        const endOfReport = endDate < currentDate ? endDate : currentDate;
+
+        // Only generate months up to current date or report end date
+        const endMonth =
+          endOfReport.getUTCFullYear() === startDate.getUTCFullYear()
+            ? endOfReport.getUTCMonth()
+            : 11; // If different year, go to December
+
+        for (let month = startDate.getUTCMonth(); month <= endMonth; month++) {
+          // Use UTC to ensure consistent timezone handling
+          const monthStart = new Date(
+            Date.UTC(startDate.getUTCFullYear(), month, 1),
+          );
+          const monthEnd = new Date(
+            Date.UTC(startDate.getUTCFullYear(), month + 1, 0, 23, 59, 59, 999),
+          );
+
+          const monthSchedules = schedules.filter((s) => {
+            const scheduleDate = new Date(s.scheduledDatetime);
+
+            return scheduleDate >= monthStart && scheduleDate <= monthEnd;
+          });
+
+          parts.push({
+            label: monthStart.toLocaleDateString('en-US', {
+              month: 'long',
+              year: 'numeric',
+              timeZone: 'UTC',
+            }),
+            startDate: monthStart,
+            endDate: monthEnd,
+            scheduledCount: monthSchedules.length,
+            attendedCount: monthSchedules.filter((s) => s.attendedDatetime)
+              .length,
+          });
+        }
+
+        break;
+      }
+
+      case ReportFilterType.MONTH: {
+        const weeksInMonth = Math.ceil(
+          (endDate.getTime() - startDate.getTime()) /
+            TIME_CONSTANTS.MILLISECONDS_PER_WEEK,
+        );
+
+        for (let week = 0; week < weeksInMonth; week++) {
+          const weekStart = new Date(startDate);
+          weekStart.setUTCDate(startDate.getUTCDate() + week * 7);
+          const weekEnd = new Date(weekStart);
+          weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+          weekEnd.setUTCHours(23, 59, 59, 999);
+
+          if (weekEnd > endDate) {
+            weekEnd.setTime(endDate.getTime());
+          }
+
+          const weekSchedules = schedules.filter((s) => {
+            const scheduleDate = new Date(s.scheduledDatetime);
+
+            return scheduleDate >= weekStart && scheduleDate <= weekEnd;
+          });
+
+          parts.push({
+            label: `Week ${week + 1}`,
+            startDate: weekStart,
+            endDate: weekEnd,
+            scheduledCount: weekSchedules.length,
+            attendedCount: weekSchedules.filter((s) => s.attendedDatetime)
+              .length,
+          });
+        }
+
+        break;
+      }
+
+      case ReportFilterType.WEEK: {
+        for (let day = 0; day < 7; day++) {
+          const dayStart = new Date(startDate);
+          dayStart.setUTCDate(startDate.getUTCDate() + day);
+          dayStart.setUTCHours(0, 0, 0, 0);
+          const dayEnd = new Date(dayStart);
+          dayEnd.setUTCHours(23, 59, 59, 999);
+
+          const daySchedules = schedules.filter((s) => {
+            const scheduleDate = new Date(s.scheduledDatetime);
+
+            return scheduleDate >= dayStart && scheduleDate <= dayEnd;
+          });
+
+          parts.push({
+            label: DAY_NAMES[dayStart.getUTCDay()],
+            startDate: dayStart,
+            endDate: dayEnd,
+            scheduledCount: daySchedules.length,
+            attendedCount: daySchedules.filter((s) => s.attendedDatetime)
+              .length,
+          });
+        }
+
+        break;
+      }
+
+      case ReportFilterType.CUSTOM: {
+        const currentDate = new Date();
+        const effectiveEndDate = endDate < currentDate ? endDate : currentDate;
+
+        const totalDays = Math.ceil(
+          (effectiveEndDate.getTime() - startDate.getTime()) /
+            TIME_CONSTANTS.MILLISECONDS_PER_DAY,
+        );
+
+        if (totalDays <= REPORT_BREAKDOWNS.DAYS_THRESHOLD_FOR_DAILY) {
+          // Daily breakdown
+          for (let day = 0; day < totalDays; day++) {
+            const dayStart = new Date(startDate);
+            dayStart.setUTCDate(startDate.getUTCDate() + day);
+            dayStart.setUTCHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setUTCHours(23, 59, 59, 999);
+
+            const daySchedules = schedules.filter((s) => {
+              const scheduleDate = new Date(s.scheduledDatetime);
+
+              return scheduleDate >= dayStart && scheduleDate <= dayEnd;
+            });
+
+            parts.push({
+              label: dayStart.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'UTC',
+              }),
+              startDate: dayStart,
+              endDate: dayEnd,
+              scheduledCount: daySchedules.length,
+              attendedCount: daySchedules.filter((s) => s.attendedDatetime)
+                .length,
+            });
+          }
+        } else if (totalDays <= REPORT_BREAKDOWNS.DAYS_THRESHOLD_FOR_WEEKLY) {
+          // Weekly breakdown
+          const weeksInRange = Math.ceil(totalDays / 7);
+
+          for (let week = 0; week < weeksInRange; week++) {
+            const weekStart = new Date(startDate);
+            weekStart.setUTCDate(startDate.getUTCDate() + week * 7);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+            weekEnd.setUTCHours(23, 59, 59, 999);
+
+            if (weekEnd > effectiveEndDate) {
+              weekEnd.setTime(effectiveEndDate.getTime());
+            }
+
+            const weekSchedules = schedules.filter((s) => {
+              const scheduleDate = new Date(s.scheduledDatetime);
+
+              return scheduleDate >= weekStart && scheduleDate <= weekEnd;
+            });
+
+            parts.push({
+              label: `Week ${week + 1}`,
+              startDate: weekStart,
+              endDate: weekEnd,
+              scheduledCount: weekSchedules.length,
+              attendedCount: weekSchedules.filter((s) => s.attendedDatetime)
+                .length,
+            });
+          }
+        } else {
+          // Monthly breakdown
+          let currentMonth = new Date(startDate);
+          currentMonth.setUTCDate(1);
+          currentMonth.setUTCHours(0, 0, 0, 0);
+
+          while (currentMonth <= effectiveEndDate) {
+            const monthEnd = new Date(
+              Date.UTC(
+                currentMonth.getUTCFullYear(),
+                currentMonth.getUTCMonth() + 1,
+                0,
+                23,
+                59,
+                59,
+                999,
+              ),
+            );
+
+            // For the first month, use the actual startDate if it's not the 1st
+            const monthStart = new Date(currentMonth);
+
+            if (
+              currentMonth.getUTCFullYear() === startDate.getUTCFullYear() &&
+              currentMonth.getUTCMonth() === startDate.getUTCMonth()
+            ) {
+              monthStart.setTime(startDate.getTime());
+            }
+
+            // For the last month, use the effective end date if it's before month end
+            const actualMonthEnd =
+              monthEnd > effectiveEndDate
+                ? new Date(effectiveEndDate.getTime())
+                : monthEnd;
+
+            const monthSchedules = schedules.filter((s) => {
+              const scheduleDate = new Date(s.scheduledDatetime);
+
+              return (
+                scheduleDate >= monthStart && scheduleDate <= actualMonthEnd
+              );
+            });
+
+            parts.push({
+              label: currentMonth.toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric',
+                timeZone: 'UTC',
+              }),
+              startDate: monthStart,
+              endDate: actualMonthEnd,
+              scheduledCount: monthSchedules.length,
+              attendedCount: monthSchedules.filter((s) => s.attendedDatetime)
+                .length,
+            });
+
+            // Move to next month
+            currentMonth = new Date(
+              Date.UTC(
+                currentMonth.getUTCFullYear(),
+                currentMonth.getUTCMonth() + 1,
+                1,
+                0,
+                0,
+                0,
+                0,
+              ),
+            );
+          }
+        }
+
+        break;
+      }
+    }
+
+    return parts;
   }
 }

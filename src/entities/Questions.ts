@@ -63,5 +63,5 @@ export class Questions extends AbstractEntity<QuestionDto> {
   @OneToMany(() => Evaluation, (evaluation) => evaluation.question)
   evaluations: Evaluation[];
 
-  dtoClass = QuestionDto
+  dtoClass = QuestionDto;
 }
