@@ -1389,6 +1389,7 @@ export class MeetingService {
       managerId,
       startDate,
       endDate,
+      getManagerReportDto.jobId,
     );
 
     const parts = this.generateReportParts(

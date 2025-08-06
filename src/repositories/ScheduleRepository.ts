@@ -1,4 +1,3 @@
-
 import { NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
 
@@ -66,15 +65,21 @@ export class ScheduleRepository extends Repository<Schedule> {
     managerId: string,
     startDate: Date,
     endDate: Date,
+    jobId?: string,
   ): Promise<Schedule[]> {
-    return this.createQueryBuilder('schedule')
+    const query = this.createQueryBuilder('schedule')
       .leftJoinAndSelect('schedule.job', 'job')
       .leftJoinAndSelect('job.manager', 'manager')
       .where('manager.managerId = :managerId', { managerId })
       .andWhere('schedule.scheduledDatetime BETWEEN :startDate AND :endDate', {
         startDate,
         endDate,
-      })
-      .getMany();
+      });
+
+    if (jobId) {
+      query.andWhere('job.jobId = :jobId', { jobId });
+    }
+
+    return query.getMany();
   }
 }

@@ -5,41 +5,42 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
-} from "typeorm";
-import { Candidate } from "./Candidate";
-import { Manager } from "./Manager";
+} from 'typeorm';
 
-@Index("candidate_verification_pkey", ["verificationId"], { unique: true })
-@Entity("candidate_verification", { schema: "public" })
+import { Candidate } from './Candidate';
+import { Manager } from './Manager';
+
+@Index('candidate_verification_pkey', ['verificationId'], { unique: true })
+@Entity('candidate_verification', { schema: 'public' })
 export class CandidateVerification {
-  @Column("numeric", {
-    name: "match_score",
+  @Column('numeric', {
+    name: 'match_score',
     nullable: true,
     precision: 3,
     scale: 0,
   })
   matchScore: string | null;
 
-  @Column("text", { name: "verification_mode", nullable: true })
+  @Column('text', { name: 'verification_mode', nullable: true })
   verificationMode: string | null;
 
-  @Column("text", { name: "verification_remarks", nullable: true })
+  @Column('text', { name: 'verification_remarks', nullable: true })
   verificationRemarks: string | null;
 
-  @Column("timestamp without time zone", {
-    name: "verification_date",
+  @Column('timestamp without time zone', {
+    name: 'verification_date',
     nullable: true,
   })
   verificationDate: Date | null;
 
-  @PrimaryGeneratedColumn({ type: "bigint", name: "verification_id" })
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'verification_id' })
   verificationId: string;
 
   @ManyToOne(() => Candidate, (candidate) => candidate.candidateVerifications)
-  @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
+  @JoinColumn([{ name: 'candidate_id', referencedColumnName: 'candidateId' }])
   candidate: Candidate;
 
   @ManyToOne(() => Manager, (manager) => manager.candidateVerifications)
-  @JoinColumn([{ name: "manager_id", referencedColumnName: "managerId" }])
+  @JoinColumn([{ name: 'manager_id', referencedColumnName: 'managerId' }])
   manager: Manager;
 }

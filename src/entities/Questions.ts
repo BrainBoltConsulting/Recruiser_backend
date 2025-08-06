@@ -1,57 +1,58 @@
-import { AbstractEntity } from "../modules/common/entities/abstract.entity";
-import { QuestionDto } from "../modules/common/modules/question/question.dto";
 import {
   Column,
   Entity,
   Index,
   OneToMany,
   PrimaryGeneratedColumn,
-} from "typeorm";
-import { Answers } from "./Answers";
-import { Dishonest } from "./Dishonest";
-import { Evaluation } from "./Evaluation";
+} from 'typeorm';
 
-@Index("questions_pkey", ["questionId"], { unique: true })
-@Entity("questions", { schema: "public" })
+import { AbstractEntity } from '../modules/common/entities/abstract.entity';
+import { QuestionDto } from '../modules/common/modules/question/question.dto';
+import { Answers } from './Answers';
+import { Dishonest } from './Dishonest';
+import { Evaluation } from './Evaluation';
+
+@Index('questions_pkey', ['questionId'], { unique: true })
+@Entity('questions', { schema: 'public' })
 export class Questions extends AbstractEntity<QuestionDto> {
-  @PrimaryGeneratedColumn({ type: "bigint", name: "question_id" })
+  @PrimaryGeneratedColumn({ type: 'bigint', name: 'question_id' })
   questionId: string;
 
-  @Column("integer", { name: "primary_skill_id", nullable: true })
+  @Column('integer', { name: 'primary_skill_id', nullable: true })
   primarySkillId: number | null;
 
-  @Column("text", { name: "sub_tech", nullable: true })
+  @Column('text', { name: 'sub_tech', nullable: true })
   subTech: string | null;
 
-  @Column("smallint", { name: "difficulty_level", nullable: true })
+  @Column('smallint', { name: 'difficulty_level', nullable: true })
   difficultyLevel: number | null;
 
-  @Column("smallint", { name: "question_level", nullable: true })
+  @Column('smallint', { name: 'question_level', nullable: true })
   questionLevel: number | null;
 
-  @Column("integer", { name: "time_to_answer", nullable: true })
+  @Column('integer', { name: 'time_to_answer', nullable: true })
   timeToAnswer: number | null;
 
-  @Column("text", { name: "question_text", nullable: true })
+  @Column('text', { name: 'question_text', nullable: true })
   questionText: string | null;
 
-  @Column("text", { name: "code_file_name", nullable: true })
+  @Column('text', { name: 'code_file_name', nullable: true })
   codeFileName: string | null;
 
-  @Column("timestamp without time zone", {
-    name: "created_at",
+  @Column('timestamp without time zone', {
+    name: 'created_at',
     nullable: true,
-    default: () => "CURRENT_TIMESTAMP",
+    default: () => 'CURRENT_TIMESTAMP',
   })
   createdAt: Date | null;
 
-  @Column("timestamp without time zone", { name: "updated_at", nullable: true })
+  @Column('timestamp without time zone', { name: 'updated_at', nullable: true })
   updatedAt: Date | null;
 
-  @Column("text", { name: "question_image_s3_link", nullable: true })
+  @Column('text', { name: 'question_image_s3_link', nullable: true })
   questionImageS3Link: string | null;
 
-  @Column("text", { name: "question_video_s3_link", nullable: true })
+  @Column('text', { name: 'question_video_s3_link', nullable: true })
   questionVideoS3Link: string | null;
 
   @OneToMany(() => Answers, (answers) => answers.question)
