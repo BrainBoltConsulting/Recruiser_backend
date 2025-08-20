@@ -1467,7 +1467,6 @@ export class MeetingService {
         hierarchicalReports,
         timeConfig,
         totalJobsCount: aggregatedData.uniqueJobsCount,
-        allJobTitles: aggregatedData.jobTitles,
       });
     }
 
@@ -1481,9 +1480,6 @@ export class MeetingService {
       hierarchicalReports,
       timeConfig,
       totalJobsCount: mainManagerTotalJobsCount,
-      allJobTitles: allJobsForMainManager
-        .map((job) => job?.jobTitle || '')
-        .filter((title) => title),
     });
   }
 
@@ -1500,7 +1496,7 @@ export class MeetingService {
       interviewHrs: number;
       followupHrs: number;
     },
-    managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
     isTopLevel = true, // New parameter to distinguish top-level vs recursive calls
   ): Promise<HierarchicalReportDto[]> {
     const hierarchicalReports: HierarchicalReportDto[] = [];
@@ -1644,7 +1640,7 @@ export class MeetingService {
         endDate,
         mainJobId,
         safeTimeConfig,
-        managerJobFilters,
+        _managerJobFilters,
         false, // This is NOT a top-level call
       );
 
@@ -1678,18 +1674,17 @@ export class MeetingService {
       interviewHrs: number;
       followupHrs: number;
     },
-    managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
   ): Promise<{
     allSchedules: Schedule[];
-    allResumes: any[]; // JobShortlistedProfiles[]
+    allResumes: Array<{ createdOn: string | number | Date }>; // JobShortlistedProfiles[]
     totalInvitesShared: number;
     totalInterviewsAttended: number;
     timeSaved: number;
     uniqueJobsCount: number;
-    jobTitles: string[];
   }> {
     const allSchedules: Schedule[] = [];
-    const allResumes: any[] = []; // JobShortlistedProfiles[]
+    const allResumes: Array<{ createdOn: string | number | Date }> = []; // JobShortlistedProfiles[]
     const allJobs: Array<{ jobId: string; jobTitle: string }> = [];
 
     // Ensure we have fallback values for timeConfig
@@ -1738,6 +1733,7 @@ export class MeetingService {
       const directReports =
         await this.managerRelationshipRepository.findByReportsToManagerId(
           currentManagerId,
+        );
 
       // Recursively collect data from all direct reports
       for (const report of directReports) {
@@ -1770,7 +1766,6 @@ export class MeetingService {
       totalInterviewsAttended,
       timeSaved,
       uniqueJobsCount: uniqueJobs.length,
-      jobTitles: uniqueJobs.map((job) => job.jobTitle),
     };
   }
 
@@ -1849,7 +1844,7 @@ export class MeetingService {
     filterType: ReportFilterType,
     startDate: Date,
     endDate: Date,
-    resumes?: any[], // JobShortlistedProfiles array
+    resumes?: Array<{ createdOn: string | number | Date }>, // JobShortlistedProfiles array
   ): ReportPartDto[] {
     const parts: ReportPartDto[] = [];
 
