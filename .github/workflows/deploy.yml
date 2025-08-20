@@ -57,6 +57,33 @@ jobs:
 
             echo "Proceeding with deployment..."
 
+            # Create systemd service file if it doesn't exist
+            if [ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
+              echo "Creating systemd service file..."
+              sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" > /dev/null <<EOF
+            [Unit]
+            Description=Interview Backend (Nest.js) Service
+            After=network.target
+
+            [Service]
+            WorkingDirectory=${PROJECT_DIR}
+            ExecStart=/usr/bin/npm run start:prod
+            Restart=always
+            RestartSec=10
+            User=ec2-user
+            Group=ec2-user
+            StandardOutput=append:/var/log/interview_api.log
+            StandardError=append:/var/log/interview_api.err
+
+            [Install]
+            WantedBy=multi-user.target
+            EOF
+
+              sudo systemctl daemon-reload
+              sudo systemctl enable ${SERVICE_NAME}
+              echo "Service file created and enabled."
+            fi
+
             # Stop the existing service if it's running
             if sudo systemctl is-active --quiet $SERVICE_NAME; then
               echo "Stopping existing $SERVICE_NAME service..."
