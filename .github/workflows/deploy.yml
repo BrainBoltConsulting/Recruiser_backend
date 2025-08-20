@@ -23,10 +23,7 @@ jobs:
             echo "Starting Deployment..."
 
             PROJECT_DIR="/home/ec2-user/recruiser/recruiser_backend"
-            CERTS_DIR="/home/ec2-user/certs"
-            SSL_KEY="$CERTS_DIR/key.pem"
-            SSL_CERT="$CERTS_DIR/cert.pem"
-            PORT=3000  # Adjust this port if necessary for your app
+            SERVICE_NAME="interview_api"
 
             # Ensure project directory exists
             sudo mkdir -p "$PROJECT_DIR"
@@ -58,52 +55,37 @@ jobs:
             # Build the NestJS application
             npm run build:prod || { echo 'Failed to build the NestJS application. Exiting...'; exit 1; }
 
-            # Start SSH Tunnel for PostgreSQL
-            echo "Setting up SSH Tunnel for PostgreSQL..."
-            SSH_TUNNEL_CMD="ssh -i ../BastionHostKeyPair.pem -L 5433:databasets.chygq4ecec7u.us-east-2.rds.amazonaws.com:5432 ec2-user@52.15.194.170 -N -f"
+            echo "Proceeding with deployment..."
 
-            # Check if the SSH tunnel is already running
-            if ps aux | grep -v grep | grep -q "$SSH_TUNNEL_CMD"; then
-              echo "SSH Tunnel is already running."
+            # Stop the existing service if it's running
+            if sudo systemctl is-active --quiet $SERVICE_NAME; then
+              echo "Stopping existing $SERVICE_NAME service..."
+              sudo systemctl stop $SERVICE_NAME || { echo "Failed to stop service. Exiting..."; exit 1; }
+              echo "Service stopped successfully."
             else
-              echo "Starting SSH Tunnel..."
-              nohup $SSH_TUNNEL_CMD > /dev/null 2>&1 &
-              sleep 10  # Give it more time to establish
-
-              # Check again to ensure the tunnel is running
-              if ps aux | grep -v grep | grep -q "$SSH_TUNNEL_CMD"; then
-                echo "SSH Tunnel started successfully."
-              else
-                echo "ERROR: Failed to start SSH Tunnel. Exiting..."
-                exit 1
-              fi
+              echo "No existing service found. Proceeding with deployment."
             fi
 
-            # Ensure SSL certificates exist
-            if [ ! -f "$SSL_KEY" ] || [ ! -f "$SSL_CERT" ]; then
-              echo "ERROR: SSL certificates are missing! Exiting..."
+            # Load environment variables
+            export $(grep -v '^#' .env | xargs)
+
+            # Start the service using systemctl
+            echo "Starting $SERVICE_NAME service..."
+            sudo systemctl start $SERVICE_NAME || { echo "Failed to start service. Exiting..."; exit 1; }
+
+            # Wait a moment for the service to start
+            sleep 5
+
+            # Check if the service is running
+            if sudo systemctl is-active --quiet $SERVICE_NAME; then
+              echo "Service started successfully!"
+              
+              # Show service status
+              sudo systemctl status $SERVICE_NAME --no-pager -l
+              
+              echo "Deployment completed successfully!"
+            else
+              echo "ERROR: Service failed to start!"
+              sudo systemctl status $SERVICE_NAME --no-pager -l
               exit 1
             fi
-
-            echo "SSL certificates found. Starting application with SSL..."
-
-            # Check if the app is already running on the port
-            if lsof -i:$PORT; then
-              echo "Application is already running on port $PORT. Stopping previous instance..."
-              # Get the process ID (PID) of the running application and kill it
-              APP_PID=$(lsof -t -i:$PORT)
-              kill -9 $APP_PID || { echo "Failed to stop previous instance. Exiting..."; exit 1; }
-              echo "Previous instance stopped successfully."
-            else
-              echo "No previous instance found. Proceeding with deployment."
-            fi
-
-            # Export SSL certificate paths as environment variables
-            export SSL_KEY="$SSL_KEY"
-            export SSL_CERT="$SSL_CERT"
-
-            # Load environment variables and start the server with SSL
-            export $(grep -v '^#' .env | xargs)
-            nohup npm run start:prod >> output.log 2>&1 &
-
-            echo "Deployment completed successfully!"

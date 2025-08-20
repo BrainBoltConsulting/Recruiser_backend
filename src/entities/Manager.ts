@@ -13,6 +13,7 @@ import { Interview } from './Interview';
 import { Jobs } from './Jobs';
 import { JobShortlistedProfiles } from './JobShortlistedProfiles';
 import { Login } from './Login';
+import { ManagerRelationship } from './ManagerRelationship';
 
 @Index('manager_manager_email_key', ['managerEmail'], { unique: true })
 @Index('manager_pkey', ['managerId'], { unique: true })
@@ -79,4 +80,16 @@ export class Manager {
   @ManyToOne(() => Login, (login) => login.managers)
   @JoinColumn([{ name: 'login_id', referencedColumnName: 'loginId' }])
   login: Login;
+
+  @OneToMany(
+    () => ManagerRelationship,
+    (managerRelationship) => managerRelationship.manager,
+  )
+  managerRelationships: ManagerRelationship[];
+
+  @OneToMany(
+    () => ManagerRelationship,
+    (managerRelationship) => managerRelationship.reportsToManager,
+  )
+  reportsToManagerRelationships: ManagerRelationship[];
 }

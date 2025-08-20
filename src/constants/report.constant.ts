@@ -15,6 +15,6 @@ export const TIME_CONSTANTS = {
 } as const;
 
 export const REPORT_BREAKDOWNS = {
-  DAYS_THRESHOLD_FOR_DAILY: 7,
+  DAYS_THRESHOLD_FOR_DAILY: 10, // Allow daily breakdown for up to 8 days (covers 7-day ranges after normalization)
   DAYS_THRESHOLD_FOR_WEEKLY: 60, // Allow weekly breakdown for up to ~2 months
 } as const;

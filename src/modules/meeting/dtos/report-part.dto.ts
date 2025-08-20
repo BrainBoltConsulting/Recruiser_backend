@@ -18,4 +18,7 @@ export class ReportPartDto {
 
   @ApiProperty({ description: 'Number of interviews attended in this period' })
   attendedCount: number;
+
+  @ApiProperty({ description: 'Number of resumes uploaded in this period' })
+  resumesUploadedCount: number;
 }

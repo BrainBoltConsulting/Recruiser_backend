@@ -70,7 +70,7 @@ export class ScheduleRepository extends Repository<Schedule> {
     const query = this.createQueryBuilder('schedule')
       .leftJoinAndSelect('schedule.job', 'job')
       .leftJoinAndSelect('job.manager', 'manager')
-      .where('manager.managerId = :managerId', { managerId })
+      .where('job.manager_id = :managerId', { managerId })
       .andWhere('schedule.scheduledDatetime BETWEEN :startDate AND :endDate', {
         startDate,
         endDate,
@@ -81,5 +81,24 @@ export class ScheduleRepository extends Repository<Schedule> {
     }
 
     return query.getMany();
+  }
+
+  /**
+   * Get all jobs for a specific manager (regardless of schedules)
+   */
+  async findJobsByManagerId(managerId: string): Promise<any[]> {
+    return this.createQueryBuilder('schedule')
+      .select('job.jobId', 'jobId')
+      .addSelect('job.jobTitle', 'jobTitle')
+      .addSelect('job.yearsOfExp', 'yearsOfExp')
+      .addSelect('job.jobDesc', 'jobDesc')
+      .addSelect('COUNT(schedule.scheduleId)', 'scheduleCount')
+      .leftJoin('schedule.job', 'job')
+      .where('job.managerId = :managerId', { managerId })
+      .groupBy('job.jobId')
+      .addGroupBy('job.jobTitle')
+      .addGroupBy('job.yearsOfExp')
+      .addGroupBy('job.jobDesc')
+      .getRawMany();
   }
 }

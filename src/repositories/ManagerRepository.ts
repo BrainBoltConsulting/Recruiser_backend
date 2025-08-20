@@ -21,7 +21,7 @@ export class ManagerRepository extends Repository<Manager> {
 
   async findById(id: string): Promise<Manager> {
     const entity = await this.createQueryBuilder('manager')
-      .where('manager.id = :id', { id })
+      .where('manager.managerId = :id', { id })
       .getOne();
 
     if (!entity) {
