@@ -30,4 +30,30 @@ export class JobShortlistedProfilesRepository extends Repository<JobShortlistedP
 
     return entity;
   }
+
+  /**
+   * Find shortlisted profiles by manager ID and date range for resume upload count
+   */
+  async findByManagerIdAndDateRange(
+    managerId: string,
+    startDate: Date,
+    endDate: Date,
+    jobId?: string,
+  ): Promise<JobShortlistedProfiles[]> {
+    const query = this.createQueryBuilder('shortlist')
+      .leftJoinAndSelect('shortlist.job', 'job')
+      .leftJoinAndSelect('shortlist.manager', 'manager')
+      .leftJoinAndSelect('shortlist.candidate', 'candidate')
+      .where('shortlist.manager_id = :managerId', { managerId })
+      .andWhere('shortlist.created_on BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      });
+
+    if (jobId) {
+      query.andWhere('job.job_id = :jobId', { jobId });
+    }
+
+    return query.getMany();
+  }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop */
 /* eslint-disable sonarjs/cognitive-complexity */
 import {
   BadRequestException,
@@ -23,7 +24,10 @@ import { ConfigRepository } from '../../repositories/ConfigRepository';
 import { DishonestRepository } from '../../repositories/DishonestRepository';
 import { EvaluationRepository } from '../../repositories/EvaluationRepository';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
+import { JobShortlistedProfilesRepository } from '../../repositories/JobShortlistedProfilesRepository';
 import { JobsRepository } from '../../repositories/JobsRepository';
+import { ManagerRelationshipRepository } from '../../repositories/ManagerRelationshipRepository';
+import { ManagerRepository } from '../../repositories/ManagerRepository';
 import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { PollyService } from '../../shared/services/aws-polly.service';
@@ -35,6 +39,7 @@ import { QuestionService } from '../question/question.service';
 import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
 import type { GetManagerReportDto } from './dtos/manager-report-request.dto';
+import type { HierarchicalReportDto } from './dtos/manager-report-response.dto';
 import { ManagerReportResponseDto } from './dtos/manager-report-response.dto';
 import type { ReportPartDto } from './dtos/report-part.dto';
 import type { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
@@ -48,7 +53,7 @@ export class MeetingService {
     private readonly pollyService: PollyService,
     private readonly s3Service: S3Service,
     private readonly slackNotificationService: SlackNotificationService,
-    private readonly configService: ApiConfigService,
+    private readonly apiConfigService: ApiConfigService,
     private readonly candidateRepository: CandidateRepository,
     private readonly interviewRepository: InterviewRepository,
     private readonly scheduleRepository: ScheduleRepository,
@@ -59,6 +64,9 @@ export class MeetingService {
     private readonly mailService: MailService,
     private readonly questionService: QuestionService,
     private readonly enhancedLogger: EnhancedLoggerService,
+    private readonly managerRelationshipRepository: ManagerRelationshipRepository,
+    private readonly managerRepository: ManagerRepository,
+    private readonly jobShortlistedProfilesRepository: JobShortlistedProfilesRepository,
   ) {}
 
   async getInterviewsOfCandidate(candidateId: number) {
@@ -1239,7 +1247,7 @@ export class MeetingService {
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {
-    const meetingLink = `${this.configService.frontendUrl}/meeting/${meetingPostfix}`;
+    const meetingLink = `${this.apiConfigService.frontendUrl}/meeting/${meetingPostfix}`;
     const scheduleEntity = await this.scheduleRepository.findByMeetingLink(
       meetingLink,
     );
@@ -1373,7 +1381,7 @@ export class MeetingService {
 
   generateNewMeetingLink() {
     const uniqueIdOfMeeting = UtilsProvider.generateUniqueIdOfMeeting();
-    const fullPath = `${this.configService.frontendUrl}/meeting/${uniqueIdOfMeeting}`;
+    const fullPath = `${this.apiConfigService.frontendUrl}/meeting/${uniqueIdOfMeeting}`;
 
     return fullPath;
   }
@@ -1385,18 +1393,82 @@ export class MeetingService {
     const { startDate, endDate } = this.calculateDateRange(getManagerReportDto);
     const filterType = this.determineFilterType(startDate, endDate);
 
+    // Get time savings configuration
+    const timeConfig = await this.configRepository.getTimeSavingsConfig();
+
+    // Get schedules for the main manager
     const schedules = await this.scheduleRepository.findByManagerIdAndDateRange(
       managerId,
       startDate,
       endDate,
+      getManagerReportDto.jobId,
     );
 
-    const parts = this.generateReportParts(
+    // Fetch resume data for the main manager
+    const resumes =
+      await this.jobShortlistedProfilesRepository.findByManagerIdAndDateRange(
+        managerId,
+        startDate,
+        endDate,
+        getManagerReportDto.jobId,
+      );
+
+    const allJobsForMainManager = await this.jobsRepository.findByManagerId(
+      managerId,
+    );
+    const mainManagerTotalJobsCount = allJobsForMainManager.length;
+
+    // Generate report parts for the main manager
+    const mainManagerParts = this.generateReportParts(
       schedules,
       filterType,
       startDate,
       endDate,
+      resumes,
     );
+
+    let hierarchicalReports: HierarchicalReportDto[] | undefined;
+
+    // If hierarchical reporting is requested, get data from direct reports
+    if (getManagerReportDto.includeHierarchy) {
+      hierarchicalReports = await this.generateHierarchicalReports(
+        managerId,
+        startDate,
+        endDate,
+        getManagerReportDto.jobId,
+        timeConfig,
+        getManagerReportDto.managerJobFilters,
+      );
+
+      // Aggregate data from current manager + all children for the main summary
+      const aggregatedData = await this.aggregateManagerAndChildrenData(
+        managerId,
+        startDate,
+        endDate,
+        getManagerReportDto.jobId,
+        timeConfig,
+        getManagerReportDto.managerJobFilters,
+      );
+
+      // Create new DTO with aggregated summary
+      return new ManagerReportResponseDto({
+        managerId,
+        filterType,
+        startDate,
+        endDate,
+        schedules: aggregatedData.allSchedules, // Use aggregated schedules for parts generation
+        parts: this.generateReportParts(
+          aggregatedData.allSchedules,
+          filterType,
+          startDate,
+          endDate,
+          aggregatedData.allResumes,
+        ),
+        hierarchicalReports,
+        timeConfig,
+        totalJobsCount: aggregatedData.uniqueJobsCount,
+      });
+    }
 
     return new ManagerReportResponseDto({
       managerId,
@@ -1404,8 +1476,297 @@ export class MeetingService {
       startDate,
       endDate,
       schedules,
-      parts,
+      parts: mainManagerParts,
+      hierarchicalReports,
+      timeConfig,
+      totalJobsCount: mainManagerTotalJobsCount,
     });
+  }
+
+  /**
+   * Generate hierarchical reports for a manager and their subordinates
+   */
+  private async generateHierarchicalReports(
+    managerId: string,
+    startDate: Date,
+    endDate: Date,
+    mainJobId?: string,
+    timeConfig?: {
+      coordHrs: number;
+      interviewHrs: number;
+      followupHrs: number;
+    },
+    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    isTopLevel = true, // New parameter to distinguish top-level vs recursive calls
+  ): Promise<HierarchicalReportDto[]> {
+    const hierarchicalReports: HierarchicalReportDto[] = [];
+
+    // Ensure we have fallback values for timeConfig
+    const safeTimeConfig = timeConfig || {
+      coordHrs: 0,
+      interviewHrs: 0,
+      followupHrs: 0,
+    };
+
+    // Only add the main manager's individual data for TOP-LEVEL calls
+    if (isTopLevel) {
+      const mainManagerSchedules =
+        await this.scheduleRepository.findByManagerIdAndDateRange(
+          managerId,
+          startDate,
+          endDate,
+          mainJobId,
+        );
+
+      // Get main manager resumes
+      const mainManagerResumes =
+        await this.jobShortlistedProfilesRepository.findByManagerIdAndDateRange(
+          managerId,
+          startDate,
+          endDate,
+          mainJobId,
+        );
+
+      // Get main manager details
+      const mainManager = await this.managerRepository.findById(managerId);
+
+      if (!mainManager) {
+        throw new NotFoundException(`Manager with ID ${managerId} not found`);
+      }
+
+      const mainManagerTotalInvitesShared = mainManagerSchedules.length;
+      const mainManagerTotalInterviewsAttended = mainManagerSchedules.filter(
+        (s) => s.attendedDatetime,
+      ).length;
+
+      const mainManagerTimeSaved =
+        (safeTimeConfig.coordHrs || 0) * mainManagerTotalInvitesShared +
+        (safeTimeConfig.interviewHrs || 0) *
+          mainManagerTotalInterviewsAttended +
+        (safeTimeConfig.followupHrs || 0) * mainManagerTotalInvitesShared;
+
+      // Get all jobs for the main manager
+      const allJobsForMainManager = await this.jobsRepository.findByManagerId(
+        managerId,
+      );
+
+      const mainManagerTotalJobsCount = allJobsForMainManager.length;
+
+      // Generate report parts for the main manager
+      const filterType = this.determineFilterType(startDate, endDate);
+      const mainManagerParts = this.generateReportParts(
+        mainManagerSchedules,
+        filterType,
+        startDate,
+        endDate,
+        mainManagerResumes,
+      );
+
+      // Add main manager's individual data
+      hierarchicalReports.push({
+        managerId,
+        managerEmail: mainManager.managerEmail,
+        firstName: mainManager.firstName || '',
+        lastName: mainManager.lastName || '',
+        summary: {
+          totalInvitesShared: mainManagerTotalInvitesShared,
+          totalInterviewsAttended: mainManagerTotalInterviewsAttended,
+          timeSaved: Math.round(mainManagerTimeSaved * 100) / 100,
+          totalResumesUploaded: mainManagerResumes.length,
+          uniqueJobsCount: mainManagerTotalJobsCount,
+        },
+        parts: mainManagerParts,
+        subReports: undefined, // Main manager doesn't have sub-reports at this level
+      });
+    }
+
+    // Get all direct reports for this manager
+    const directReports =
+      await this.managerRelationshipRepository.findByReportsToManagerId(
+        managerId,
+      );
+
+    for (const report of directReports) {
+      // Get schedules for this direct report
+      const schedules =
+        await this.scheduleRepository.findByManagerIdAndDateRange(
+          report.managerId,
+          startDate,
+          endDate,
+          mainJobId,
+        );
+
+      // Get resumes for this direct report
+      const resumes =
+        await this.jobShortlistedProfilesRepository.findByManagerIdAndDateRange(
+          report.managerId,
+          startDate,
+          endDate,
+          mainJobId,
+        );
+
+      // Generate report parts for this manager
+      const filterType = this.determineFilterType(startDate, endDate);
+      const parts = this.generateReportParts(
+        schedules,
+        filterType,
+        startDate,
+        endDate,
+        resumes,
+      );
+
+      // Calculate summary for this manager
+      const totalInvitesShared = schedules.length;
+      const totalInterviewsAttended = schedules.filter(
+        (s) => s.attendedDatetime,
+      ).length;
+
+      const timeSaved =
+        (safeTimeConfig.coordHrs || 0) * totalInvitesShared +
+        (safeTimeConfig.interviewHrs || 0) * totalInterviewsAttended +
+        (safeTimeConfig.followupHrs || 0) * totalInvitesShared;
+
+      // Get all jobs for this manager (not just from schedules)
+      const allJobsForManager = await this.jobsRepository.findByManagerId(
+        report.managerId,
+      );
+
+      const totalJobsCount = allJobsForManager.length;
+
+      // Recursively get sub-reports for this manager (NOT top-level)
+      const subReports = await this.generateHierarchicalReports(
+        report.managerId,
+        startDate,
+        endDate,
+        mainJobId,
+        safeTimeConfig,
+        _managerJobFilters,
+        false, // This is NOT a top-level call
+      );
+
+      hierarchicalReports.push({
+        managerId: report.managerId,
+        managerEmail: report.manager.managerEmail,
+        firstName: report.manager.firstName || '',
+        lastName: report.manager.lastName || '',
+        summary: {
+          totalInvitesShared,
+          totalInterviewsAttended,
+          timeSaved: Math.round(timeSaved * 100) / 100,
+          totalResumesUploaded: resumes.length,
+          uniqueJobsCount: totalJobsCount,
+        },
+        parts,
+        subReports: subReports.length > 0 ? subReports : undefined,
+      });
+    }
+
+    return hierarchicalReports;
+  }
+
+  private async aggregateManagerAndChildrenData(
+    managerId: string,
+    startDate: Date,
+    endDate: Date,
+    mainJobId?: string,
+    timeConfig?: {
+      coordHrs: number;
+      interviewHrs: number;
+      followupHrs: number;
+    },
+    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+  ): Promise<{
+    allSchedules: Schedule[];
+    allResumes: Array<{ createdOn: string | number | Date }>; // JobShortlistedProfiles[]
+    totalInvitesShared: number;
+    totalInterviewsAttended: number;
+    timeSaved: number;
+    uniqueJobsCount: number;
+  }> {
+    const allSchedules: Schedule[] = [];
+    const allResumes: Array<{ createdOn: string | number | Date }> = []; // JobShortlistedProfiles[]
+    const allJobs: Array<{ jobId: string; jobTitle: string }> = [];
+
+    // Ensure we have fallback values for timeConfig
+    const safeTimeConfig = timeConfig || {
+      coordHrs: 0,
+      interviewHrs: 0,
+      followupHrs: 0,
+    };
+
+    // Recursive function to collect all managers in the hierarchy
+    const collectAllManagersInHierarchy = async (
+      currentManagerId: string,
+    ): Promise<void> => {
+      // Get schedules for current manager
+      const managerSchedules =
+        await this.scheduleRepository.findByManagerIdAndDateRange(
+          currentManagerId,
+          startDate,
+          endDate,
+          mainJobId,
+        );
+      allSchedules.push(...managerSchedules);
+
+      // Get resumes for current manager
+      const managerResumes =
+        await this.jobShortlistedProfilesRepository.findByManagerIdAndDateRange(
+          currentManagerId,
+          startDate,
+          endDate,
+          mainJobId,
+        );
+      allResumes.push(...managerResumes);
+
+      // Get ALL jobs for current manager
+      const managerJobs = await this.jobsRepository.findByManagerId(
+        currentManagerId,
+      );
+      allJobs.push(
+        ...managerJobs.map((job) => ({
+          jobId: job.jobId,
+          jobTitle: job.jobTitle || '',
+        })),
+      );
+
+      // Get direct reports of current manager
+      const directReports =
+        await this.managerRelationshipRepository.findByReportsToManagerId(
+          currentManagerId,
+        );
+
+      // Recursively collect data from all direct reports
+      for (const report of directReports) {
+        await collectAllManagersInHierarchy(report.managerId);
+      }
+    };
+
+    // Start recursive collection from the main manager
+    await collectAllManagersInHierarchy(managerId);
+
+    // Remove duplicate jobs based on jobId
+    const uniqueJobs = allJobs.filter(
+      (job, index, self) =>
+        index === self.findIndex((j) => j.jobId === job.jobId),
+    );
+
+    const totalInvitesShared = allSchedules.length;
+    const totalInterviewsAttended = allSchedules.filter(
+      (s) => s.attendedDatetime,
+    ).length;
+    const timeSaved =
+      (safeTimeConfig.coordHrs || 0) * totalInvitesShared +
+      (safeTimeConfig.interviewHrs || 0) * totalInterviewsAttended +
+      (safeTimeConfig.followupHrs || 0) * totalInvitesShared;
+
+    return {
+      allSchedules,
+      allResumes,
+      totalInvitesShared,
+      totalInterviewsAttended,
+      timeSaved,
+      uniqueJobsCount: uniqueJobs.length,
+    };
   }
 
   private calculateDateRange(dto: GetManagerReportDto): {
@@ -1483,6 +1844,7 @@ export class MeetingService {
     filterType: ReportFilterType,
     startDate: Date,
     endDate: Date,
+    resumes?: Array<{ createdOn: string | number | Date }>, // JobShortlistedProfiles array
   ): ReportPartDto[] {
     const parts: ReportPartDto[] = [];
 
@@ -1512,6 +1874,12 @@ export class MeetingService {
             return scheduleDate >= monthStart && scheduleDate <= monthEnd;
           });
 
+          const monthResumes = (resumes || []).filter((r) => {
+            const resumeDate = new Date(r.createdOn);
+
+            return resumeDate >= monthStart && resumeDate <= monthEnd;
+          });
+
           parts.push({
             label: monthStart.toLocaleDateString('en-US', {
               month: 'long',
@@ -1523,6 +1891,7 @@ export class MeetingService {
             scheduledCount: monthSchedules.length,
             attendedCount: monthSchedules.filter((s) => s.attendedDatetime)
               .length,
+            resumesUploadedCount: monthResumes.length,
           });
         }
 
@@ -1552,6 +1921,12 @@ export class MeetingService {
             return scheduleDate >= weekStart && scheduleDate <= weekEnd;
           });
 
+          const weekResumes = (resumes || []).filter((r) => {
+            const resumeDate = new Date(r.createdOn);
+
+            return resumeDate >= weekStart && resumeDate <= weekEnd;
+          });
+
           parts.push({
             label: `Week ${week + 1}`,
             startDate: weekStart,
@@ -1559,6 +1934,7 @@ export class MeetingService {
             scheduledCount: weekSchedules.length,
             attendedCount: weekSchedules.filter((s) => s.attendedDatetime)
               .length,
+            resumesUploadedCount: weekResumes.length,
           });
         }
 
@@ -1579,6 +1955,12 @@ export class MeetingService {
             return scheduleDate >= dayStart && scheduleDate <= dayEnd;
           });
 
+          const dayResumes = (resumes || []).filter((r) => {
+            const resumeDate = new Date(r.createdOn);
+
+            return resumeDate >= dayStart && resumeDate <= dayEnd;
+          });
+
           parts.push({
             label: DAY_NAMES[dayStart.getUTCDay()],
             startDate: dayStart,
@@ -1586,6 +1968,7 @@ export class MeetingService {
             scheduledCount: daySchedules.length,
             attendedCount: daySchedules.filter((s) => s.attendedDatetime)
               .length,
+            resumesUploadedCount: dayResumes.length,
           });
         }
 
@@ -1616,6 +1999,12 @@ export class MeetingService {
               return scheduleDate >= dayStart && scheduleDate <= dayEnd;
             });
 
+            const dayResumes = (resumes || []).filter((r) => {
+              const resumeDate = new Date(r.createdOn);
+
+              return resumeDate >= dayStart && resumeDate <= dayEnd;
+            });
+
             parts.push({
               label: dayStart.toLocaleDateString('en-US', {
                 weekday: 'long',
@@ -1628,6 +2017,7 @@ export class MeetingService {
               scheduledCount: daySchedules.length,
               attendedCount: daySchedules.filter((s) => s.attendedDatetime)
                 .length,
+              resumesUploadedCount: dayResumes.length,
             });
           }
         } else if (totalDays <= REPORT_BREAKDOWNS.DAYS_THRESHOLD_FOR_WEEKLY) {
@@ -1651,6 +2041,12 @@ export class MeetingService {
               return scheduleDate >= weekStart && scheduleDate <= weekEnd;
             });
 
+            const weekResumes = (resumes || []).filter((r) => {
+              const resumeDate = new Date(r.createdOn);
+
+              return resumeDate >= weekStart && resumeDate <= weekEnd;
+            });
+
             parts.push({
               label: `Week ${week + 1}`,
               startDate: weekStart,
@@ -1658,6 +2054,7 @@ export class MeetingService {
               scheduledCount: weekSchedules.length,
               attendedCount: weekSchedules.filter((s) => s.attendedDatetime)
                 .length,
+              resumesUploadedCount: weekResumes.length,
             });
           }
         } else {
@@ -1703,6 +2100,12 @@ export class MeetingService {
               );
             });
 
+            const monthResumes = (resumes || []).filter((r) => {
+              const resumeDate = new Date(r.createdOn);
+
+              return resumeDate >= monthStart && resumeDate <= actualMonthEnd;
+            });
+
             parts.push({
               label: currentMonth.toLocaleDateString('en-US', {
                 month: 'long',
@@ -1714,6 +2117,7 @@ export class MeetingService {
               scheduledCount: monthSchedules.length,
               attendedCount: monthSchedules.filter((s) => s.attendedDatetime)
                 .length,
+              resumesUploadedCount: monthResumes.length,
             });
 
             // Move to next month

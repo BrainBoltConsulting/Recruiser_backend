@@ -30,4 +30,14 @@ export class JobsRepository extends Repository<Jobs> {
 
     return entity;
   }
+
+  /**
+   * Get all jobs for a specific manager
+   */
+  async findByManagerId(managerId: string): Promise<Jobs[]> {
+    return this.createQueryBuilder('jobs')
+      .where('jobs.manager_id = :managerId', { managerId })
+      .andWhere('jobs.isDeleted = false')
+      .getMany();
+  }
 }

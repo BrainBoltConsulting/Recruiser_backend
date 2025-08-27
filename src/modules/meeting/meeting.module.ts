@@ -6,7 +6,10 @@ import { ConfigRepository } from '../../repositories/ConfigRepository';
 import { DishonestRepository } from '../../repositories/DishonestRepository';
 import { EvaluationRepository } from '../../repositories/EvaluationRepository';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
+import { JobShortlistedProfilesRepository } from '../../repositories/JobShortlistedProfilesRepository';
 import { JobsRepository } from '../../repositories/JobsRepository';
+import { ManagerRelationshipRepository } from '../../repositories/ManagerRelationshipRepository';
+import { ManagerRepository } from '../../repositories/ManagerRepository';
 import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { SharedModule } from '../../shared/shared.module';
 import { AuthModule } from '../auth/auth.module';
@@ -26,6 +29,9 @@ import { MeetingService } from './meeting.service';
       InterviewRepository,
       DishonestRepository,
       JobsRepository,
+      JobShortlistedProfilesRepository,
+      ManagerRelationshipRepository,
+      ManagerRepository,
     ]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),
