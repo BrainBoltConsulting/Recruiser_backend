@@ -1,13 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { TypeOrmModuleOptions } from '@nestjs/typeorm';
+
 import type { IAwsS3Config } from '../../modules/common/interfaces/IAwsS3Config';
 
 @Injectable()
 export class ApiConfigService {
-  constructor(
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly configService: ConfigService) {}
 
   private getNumber(key: string): number {
     return Number(this.configService.get(key));
@@ -29,29 +28,32 @@ export class ApiConfigService {
 
   get appUrls() {
     return {
-      emailVerifyRoute: this.appConfig.frontendUrl + this.getString('EMAIL_VERIFY_ROUTE'),
-      resetPasswordRoute: this.appConfig.frontendUrl + this.getString('RESET_PASSWORD_ROUTE'),
-      setPasswordRoute: this.appConfig.frontendUrl + this.getString('SET_PASSWORD_ROUTE')
-    }
+      emailVerifyRoute:
+        this.appConfig.frontendUrl + this.getString('EMAIL_VERIFY_ROUTE'),
+      resetPasswordRoute:
+        this.appConfig.frontendUrl + this.getString('RESET_PASSWORD_ROUTE'),
+      setPasswordRoute:
+        this.appConfig.frontendUrl + this.getString('SET_PASSWORD_ROUTE'),
+    };
   }
 
   get agoraConfig() {
     return {
-        appId: this.getString('AGORA_APP_ID'),
-        appCertificate: this.getString('AGORA_APP_CERTIFICATE')
-    }
+      appId: this.getString('AGORA_APP_ID'),
+      appCertificate: this.getString('AGORA_APP_CERTIFICATE'),
+    };
   }
 
   get xlsxFilepath() {
-    return this.getString('XLSX_FILE_KEY')
+    return this.getString('XLSX_FILE_KEY');
   }
 
   get firebaseApiKey() {
-    return this.getString('FIREBASE_API_KEY')
+    return this.getString('FIREBASE_API_KEY');
   }
 
   get cloudFrontUrl() {
-    return this.getString('CLOUD_FRONT_URL') || ''
+    return this.getString('CLOUD_FRONT_URL') || '';
   }
 
   get frontendUrl() {
@@ -67,11 +69,11 @@ export class ApiConfigService {
       username: this.getString('DB_USERNAME'),
       password: this.getString('DB_PASSWORD'),
       database: this.getString('DB_DATABASE'),
-      logging: true,
+      logging: this.getString('DB_LOGGING_ENABLED') === 'true' ? true : false,
       synchronize: false,
       ssl: {
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+      },
     };
 
     return data;
@@ -100,7 +102,9 @@ export class ApiConfigService {
   get awsConfig(): IAwsS3Config {
     return {
       region: this.getString('AWS_REGION'),
-      cloudWatchInterviewGroupName: this.getString('AWS_CLOUD_WATCH_INTERVIEW_NAME'),
+      cloudWatchInterviewGroupName: this.getString(
+        'AWS_CLOUD_WATCH_INTERVIEW_NAME',
+      ),
       credentials: {
         accessKeyId: `${this.getString('AWS_ACCESS_KEY_ID')}`,
         secretAccessKey: this.getString('AWS_SECRET_ACCESS_KEY'),
@@ -120,7 +124,7 @@ export class ApiConfigService {
     return {
       zohoClientId: this.getString('ZOHO_CLIENT_ID'),
       zohoClientSecret: this.getString('ZOHO_CLIENT_SECRET'),
-      zohoScope: this.getString('ZOHO_SCOPE')
+      zohoScope: this.getString('ZOHO_SCOPE'),
     };
   }
 

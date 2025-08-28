@@ -1,3 +1,4 @@
+/* eslint-disable import/no-default-export */
 import { config } from 'dotenv';
 import { DataSource } from 'typeorm';
 
@@ -11,9 +12,9 @@ export default new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   ssl: {
-    rejectUnauthorized: false
+    rejectUnauthorized: false,
   },
   entities: ['src/entities/*{.ts,.js}'],
   // migrations: ['src/migrations/*{.ts,.js}'],
-  synchronize: false
+  synchronize: false,
 });

@@ -1390,97 +1390,329 @@ export class MeetingService {
     getManagerReportDto: GetManagerReportDto,
     managerId: string,
   ): Promise<ManagerReportResponseDto> {
-    const { startDate, endDate } = this.calculateDateRange(getManagerReportDto);
-    const filterType = this.determineFilterType(startDate, endDate);
+    this.enhancedLogger.logSeparator('MANAGER INTERVIEW REPORT GENERATION');
+    this.enhancedLogger.startTimer(`manager-report-${managerId}`);
 
-    // Get time savings configuration
-    const timeConfig = await this.configRepository.getTimeSavingsConfig();
-
-    // Get schedules for the main manager
-    const schedules = await this.scheduleRepository.findByManagerIdAndDateRange(
-      managerId,
-      startDate,
-      endDate,
-      getManagerReportDto.jobId,
-    );
-
-    // Fetch resume data for the main manager
-    const resumes =
-      await this.jobShortlistedProfilesRepository.findByManagerIdAndDateRange(
-        managerId,
-        startDate,
-        endDate,
-        getManagerReportDto.jobId,
+    try {
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '🚀 Starting manager interview report generation',
+        {
+          metadata: {
+            managerId,
+            startDate: getManagerReportDto.startDate,
+            endDate: getManagerReportDto.endDate,
+            jobId: getManagerReportDto.jobId,
+            includeHierarchy: getManagerReportDto.includeHierarchy,
+            managerJobFilters: getManagerReportDto.managerJobFilters,
+          },
+        },
+        'MeetingService',
       );
 
-    const allJobsForMainManager = await this.jobsRepository.findByManagerId(
-      managerId,
-    );
-    const mainManagerTotalJobsCount = allJobsForMainManager.length;
+      const { startDate, endDate } =
+        this.calculateDateRange(getManagerReportDto);
+      const filterType = this.determineFilterType(startDate, endDate);
 
-    // Generate report parts for the main manager
-    const mainManagerParts = this.generateReportParts(
-      schedules,
-      filterType,
-      startDate,
-      endDate,
-      resumes,
-    );
-
-    let hierarchicalReports: HierarchicalReportDto[] | undefined;
-
-    // If hierarchical reporting is requested, get data from direct reports
-    if (getManagerReportDto.includeHierarchy) {
-      hierarchicalReports = await this.generateHierarchicalReports(
-        managerId,
-        startDate,
-        endDate,
-        getManagerReportDto.jobId,
-        timeConfig,
-        getManagerReportDto.managerJobFilters,
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '📅 Calculated date range and filter type',
+        {
+          metadata: {
+            managerId,
+            calculatedStartDate: startDate,
+            calculatedEndDate: endDate,
+            filterType,
+          },
+        },
+        'MeetingService',
       );
 
-      // Aggregate data from current manager + all children for the main summary
-      const aggregatedData = await this.aggregateManagerAndChildrenData(
-        managerId,
-        startDate,
-        endDate,
-        getManagerReportDto.jobId,
-        timeConfig,
-        getManagerReportDto.managerJobFilters,
+      // Get time savings configuration
+      this.enhancedLogger.startTimer(`db-fetch-time-config-${managerId}`);
+      const timeConfig = await this.configRepository.getTimeSavingsConfig();
+      this.enhancedLogger.endTimer(`db-fetch-time-config-${managerId}`);
+
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '⚙️ Fetched time savings configuration',
+        {
+          metadata: {
+            managerId,
+            timeConfig: timeConfig ? 'loaded' : 'not found',
+          },
+        },
+        'MeetingService',
       );
 
-      // Create new DTO with aggregated summary
-      return new ManagerReportResponseDto({
+      // Get schedules for the main manager
+      this.enhancedLogger.startTimer(`db-fetch-schedules-${managerId}`);
+      const schedules =
+        await this.scheduleRepository.findByManagerIdAndDateRange(
+          managerId,
+          startDate,
+          endDate,
+          getManagerReportDto.jobId,
+        );
+      this.enhancedLogger.endTimer(`db-fetch-schedules-${managerId}`);
+
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '📋 Fetched schedules for main manager',
+        {
+          metadata: {
+            managerId,
+            schedulesCount: schedules.length,
+            startDate,
+            endDate,
+            jobId: getManagerReportDto.jobId,
+          },
+        },
+        'MeetingService',
+      );
+
+      // Fetch resume data for the main manager
+      this.enhancedLogger.startTimer(`db-fetch-resumes-${managerId}`);
+      const resumes =
+        await this.jobShortlistedProfilesRepository.findByManagerIdAndDateRange(
+          managerId,
+          startDate,
+          endDate,
+          getManagerReportDto.jobId,
+        );
+      this.enhancedLogger.endTimer(`db-fetch-resumes-${managerId}`);
+
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '📄 Fetched resume data for main manager',
+        {
+          metadata: {
+            managerId,
+            resumesCount: resumes.length,
+            startDate,
+            endDate,
+            jobId: getManagerReportDto.jobId,
+          },
+        },
+        'MeetingService',
+      );
+
+      this.enhancedLogger.startTimer(`db-fetch-jobs-${managerId}`);
+      const allJobsForMainManager = await this.jobsRepository.findByManagerId(
         managerId,
+      );
+      this.enhancedLogger.endTimer(`db-fetch-jobs-${managerId}`);
+
+      const mainManagerTotalJobsCount = allJobsForMainManager.length;
+
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '💼 Fetched jobs for main manager',
+        {
+          metadata: {
+            managerId,
+            totalJobsCount: mainManagerTotalJobsCount,
+          },
+        },
+        'MeetingService',
+      );
+
+      // Generate report parts for the main manager
+      this.enhancedLogger.startTimer(`generate-report-parts-${managerId}`);
+      const mainManagerParts = this.generateReportParts(
+        schedules,
         filterType,
         startDate,
         endDate,
-        schedules: aggregatedData.allSchedules, // Use aggregated schedules for parts generation
-        parts: this.generateReportParts(
+        resumes,
+      );
+      this.enhancedLogger.endTimer(`generate-report-parts-${managerId}`);
+
+      this.enhancedLogger.info(
+        LogCategory.API,
+        '📊 Generated report parts for main manager',
+        {
+          metadata: {
+            managerId,
+            partsCount: mainManagerParts.length,
+            filterType,
+          },
+        },
+        'MeetingService',
+      );
+
+      let hierarchicalReports: HierarchicalReportDto[] | undefined;
+
+      // If hierarchical reporting is requested, get data from direct reports
+      if (getManagerReportDto.includeHierarchy) {
+        this.enhancedLogger.info(
+          LogCategory.API,
+          '🔄 Hierarchical reporting requested - fetching subordinate data',
+          {
+            metadata: {
+              managerId,
+              includeHierarchy: true,
+            },
+          },
+          'MeetingService',
+        );
+
+        this.enhancedLogger.startTimer(
+          `generate-hierarchical-reports-${managerId}`,
+        );
+        hierarchicalReports = await this.generateHierarchicalReports(
+          managerId,
+          startDate,
+          endDate,
+          getManagerReportDto.jobId,
+          timeConfig,
+          getManagerReportDto.managerJobFilters,
+        );
+        this.enhancedLogger.endTimer(
+          `generate-hierarchical-reports-${managerId}`,
+        );
+
+        this.enhancedLogger.info(
+          LogCategory.API,
+          '👥 Generated hierarchical reports',
+          {
+            metadata: {
+              managerId,
+              hierarchicalReportsCount: hierarchicalReports?.length || 0,
+            },
+          },
+          'MeetingService',
+        );
+
+        // Aggregate data from current manager + all children for the main summary
+        this.enhancedLogger.startTimer(`aggregate-data-${managerId}`);
+        const aggregatedData = await this.aggregateManagerAndChildrenData(
+          managerId,
+          startDate,
+          endDate,
+          getManagerReportDto.jobId,
+          timeConfig,
+          getManagerReportDto.managerJobFilters,
+        );
+        this.enhancedLogger.endTimer(`aggregate-data-${managerId}`);
+
+        this.enhancedLogger.info(
+          LogCategory.API,
+          '🔗 Aggregated data from manager and subordinates',
+          {
+            metadata: {
+              managerId,
+              aggregatedSchedulesCount: aggregatedData.allSchedules.length,
+              aggregatedResumesCount: aggregatedData.allResumes.length,
+              uniqueJobsCount: aggregatedData.uniqueJobsCount,
+            },
+          },
+          'MeetingService',
+        );
+
+        // Create new DTO with aggregated summary
+        const aggregatedParts = this.generateReportParts(
           aggregatedData.allSchedules,
           filterType,
           startDate,
           endDate,
           aggregatedData.allResumes,
-        ),
+        );
+
+        this.enhancedLogger.info(
+          LogCategory.API,
+          '📈 Generated aggregated report parts',
+          {
+            metadata: {
+              managerId,
+              aggregatedPartsCount: aggregatedParts.length,
+            },
+          },
+          'MeetingService',
+        );
+
+        const totalDuration = this.enhancedLogger.endTimer(
+          `manager-report-${managerId}`,
+        );
+
+        this.enhancedLogger.success(
+          LogCategory.API,
+          '✅ Manager interview report generated successfully with hierarchy',
+          {
+            metadata: {
+              managerId,
+              totalDuration: totalDuration.toFixed(2),
+              totalSchedules: aggregatedData.allSchedules.length,
+              totalResumes: aggregatedData.allResumes.length,
+              totalJobs: aggregatedData.uniqueJobsCount,
+              hierarchicalReportsCount: hierarchicalReports?.length || 0,
+            },
+          },
+          'MeetingService',
+        );
+
+        return new ManagerReportResponseDto({
+          managerId,
+          filterType,
+          startDate,
+          endDate,
+          schedules: aggregatedData.allSchedules, // Use aggregated schedules for parts generation
+          parts: aggregatedParts,
+          hierarchicalReports,
+          timeConfig,
+          totalJobsCount: aggregatedData.uniqueJobsCount,
+        });
+      }
+
+      const totalDuration = this.enhancedLogger.endTimer(
+        `manager-report-${managerId}`,
+      );
+
+      this.enhancedLogger.success(
+        LogCategory.API,
+        '✅ Manager interview report generated successfully (no hierarchy)',
+        {
+          metadata: {
+            managerId,
+            totalDuration: totalDuration.toFixed(2),
+            totalSchedules: schedules.length,
+            totalResumes: resumes.length,
+            totalJobs: mainManagerTotalJobsCount,
+          },
+        },
+        'MeetingService',
+      );
+
+      return new ManagerReportResponseDto({
+        managerId,
+        filterType,
+        startDate,
+        endDate,
+        schedules,
+        parts: mainManagerParts,
         hierarchicalReports,
         timeConfig,
-        totalJobsCount: aggregatedData.uniqueJobsCount,
+        totalJobsCount: mainManagerTotalJobsCount,
       });
-    }
+    } catch (error) {
+      // Always end the timer, even if an error occurs
+      this.enhancedLogger.endTimer(`manager-report-${managerId}`);
 
-    return new ManagerReportResponseDto({
-      managerId,
-      filterType,
-      startDate,
-      endDate,
-      schedules,
-      parts: mainManagerParts,
-      hierarchicalReports,
-      timeConfig,
-      totalJobsCount: mainManagerTotalJobsCount,
-    });
+      this.enhancedLogger.error(
+        LogCategory.API,
+        '❌ Error generating manager interview report',
+        {
+          metadata: {
+            managerId,
+            error: error.message,
+            stack: error.stack,
+          },
+        },
+        'MeetingService',
+      );
+
+      throw error; // Re-throw the error
+    }
   }
 
   /**
