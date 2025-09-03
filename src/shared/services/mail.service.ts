@@ -157,6 +157,12 @@ export class MailService {
                   <li>You cannot go to previous question by pressing back button.</li>
                   <li>You can finish your interview anytime by clicking the Finish Interview button</li>
                 </ul>
+                <p>
+                    <strong>Please review a short video to familiarize with the interview process</strong>
+                </p>
+                <p>
+                    <a href="https://hire2o.com/a7f3b9c1d8e2">Watch the video</a>
+                </p>
   
                 <p>
                     To join the meeting, simply click the button below:
