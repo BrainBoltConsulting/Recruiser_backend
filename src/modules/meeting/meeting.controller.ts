@@ -101,7 +101,7 @@ export class MeetingController {
   @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
   @ApiFile([{ name: 'videoFile' }], {
     okResponseData: {
-      description: 'finish-interview',
+      description: 'recording-for-question-by-meeting',
     },
   })
   @HttpCode(HttpStatus.OK)
