@@ -6,8 +6,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Transactional } from 'typeorm-transactional';
 import axios from 'axios';
+import { Transactional } from 'typeorm-transactional';
 
 import { LogCategory } from '../../constants/logger-type.enum';
 import { MessageTypeEnum } from '../../constants/message.enum';
@@ -625,8 +625,7 @@ export class MeetingService {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
         metadata: {
-          endpoint:
-            'https://kifl1yp82f.execute-api.us-east-2.amazonaws.com/dev/process',
+          endpoint: this.apiConfigService.processApiUrl,
         },
       },
       'MeetingService',
@@ -634,13 +633,14 @@ export class MeetingService {
 
     try {
       const processApiResponse = await axios.post(
-        'https://kifl1yp82f.execute-api.us-east-2.amazonaws.com/dev/process',
+        this.apiConfigService.processApiUrl,
         {
           candidateId: candidate.candidateId,
         },
         {
           timeout: 30_000, // 30 seconds timeout
           headers: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
             'Content-Type': 'application/json',
           },
         },
