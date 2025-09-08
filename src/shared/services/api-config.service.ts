@@ -145,4 +145,8 @@ export class ApiConfigService {
   get defoultMailFrom() {
     return this.getString('MAIL_FROM');
   }
+
+  get processApiUrl() {
+    return this.getString('PROCESS_API_URL');
+  }
 }

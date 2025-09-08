@@ -6,6 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import axios from 'axios';
 import { Transactional } from 'typeorm-transactional';
 
 import { LogCategory } from '../../constants/logger-type.enum';
@@ -614,6 +615,99 @@ export class MeetingService {
       },
       'MeetingService',
     );
+
+    // Call process API with candidate ID
+    this.enhancedLogger.startTimer(`process-api-call-${candidate.candidateId}`);
+    this.enhancedLogger.info(
+      LogCategory.API,
+      '🔄 Calling process API endpoint',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        metadata: {
+          endpoint: this.apiConfigService.processApiUrl,
+        },
+      },
+      'MeetingService',
+    );
+
+    try {
+      const processApiResponse = await axios.post(
+        this.apiConfigService.processApiUrl,
+        {
+          candidateId: candidate.candidateId,
+        },
+        {
+          timeout: 30_000, // 30 seconds timeout
+          headers: {
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+
+      this.enhancedLogger.endTimer(
+        `process-api-call-${candidate.candidateId}`,
+        LogCategory.API,
+        'Process API call completed successfully',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            statusCode: processApiResponse.status,
+            responseData: processApiResponse.data,
+          },
+        },
+      );
+
+      this.enhancedLogger.success(
+        LogCategory.API,
+        '✅ Process API call successful',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            statusCode: processApiResponse.status,
+          },
+        },
+        'MeetingService',
+      );
+    } catch (error) {
+      this.enhancedLogger.endTimer(
+        `process-api-call-${candidate.candidateId}`,
+        LogCategory.API,
+        'Process API call failed',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            error: error.message,
+            statusCode: error.response?.status,
+            errorData: error.response?.data,
+          },
+        },
+      );
+
+      this.enhancedLogger.error(
+        LogCategory.API,
+        '❌ Process API call failed',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            error: error.message,
+            statusCode: error.response?.status,
+          },
+        },
+        'MeetingService',
+      );
+
+      // Log the error but don't throw it to avoid breaking the interview finish flow
+      this.logger.error(
+        `Failed to call process API for candidate ${candidate.candidateId}: ${error.message}`,
+        error.stack,
+      );
+    }
 
     return UtilsProvider.getMessageOverviewByType(
       MessageTypeEnum.INTERVIEW_FINISHED,
