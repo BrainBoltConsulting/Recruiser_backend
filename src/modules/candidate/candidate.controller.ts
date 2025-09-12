@@ -1,5 +1,4 @@
 import {
-  Body,
   Controller,
   Delete,
   Get,
@@ -7,10 +6,9 @@ import {
   HttpStatus,
   Param,
   Post,
-  Put,
   Query,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { Role } from '../../constants/role.enum';
 import { Auth, UUIDParam } from '../../decorators/http.decorator';
@@ -75,5 +73,43 @@ export class CandidateController {
   @HttpCode(HttpStatus.OK)
   async deleteCandidateInterviews(@Param('id') id: number) {
     return this.candidateService.deleteCandidateInterviews(id);
+  }
+
+  @Post(':id/send-interview-completion-notification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Send interview completion notification to manager',
+    description:
+      'Sends an email notification to the manager when a candidate completes their interview',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'The ID of the candidate who completed the interview',
+    example: 123,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification sent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Interview completion notification sent successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate not found or no associated manager found',
+  })
+  async sendInterviewCompletionNotification(@Param('id') id: number) {
+    await this.candidateService.sendInterviewCompletionNotificationToManager(
+      id,
+    );
+
+    return { message: 'Interview completion notification sent successfully' };
   }
 }

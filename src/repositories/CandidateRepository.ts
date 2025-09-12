@@ -1,8 +1,8 @@
 
 import { Repository } from 'typeorm';
 import { CustomRepository } from '../db/typeorm-ex.decorator';
-import { NotFoundException } from '@nestjs/common';
 import { Candidate } from '../entities/Candidate';
+import { Manager } from '../entities/Manager';
 
 @CustomRepository(Candidate)
 export class CandidateRepository extends Repository<Candidate> {
@@ -43,6 +43,15 @@ export class CandidateRepository extends Repository<Candidate> {
     return this.createQueryBuilder('candidate')
       .where('candidate.email = :email', { email })
       .leftJoinAndSelect('candidate.login', 'login')
+      .getOne();
+  }
+
+  async findManagerByCandidateId(candidateId: number): Promise<Candidate | null> {
+    return this.createQueryBuilder('candidate')
+      .leftJoinAndSelect('candidate.jobShortlistedProfiles', 'shortlist')
+      .leftJoinAndSelect('shortlist.manager', 'manager')
+      .where('candidate.candidateId = :candidateId', { candidateId })
+      .andWhere('shortlist.manager IS NOT NULL')
       .getOne();
   }
 }

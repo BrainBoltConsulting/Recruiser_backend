@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Transactional } from 'typeorm-transactional';
 
@@ -157,7 +158,7 @@ export class CandidateService {
     // return (await this.candidateRepository.findById(id)).toDto({isAccess: true});
   }
 
-  async getAllUsers(getUsersDto: GetUsersDto): Promise<Candidate[]> {
+  async getAllUsers(_getUsersDto: GetUsersDto): Promise<Candidate[]> {
     const userEntitiesQuery = await this.candidateRepository.getAllSorted();
 
     // const [userEntities, pageMetaDto] = await userEntitiesQuery.paginate(
@@ -255,5 +256,66 @@ export class CandidateService {
     }
 
     return interviews;
+  }
+
+  @Transactional()
+  async sendInterviewCompletionNotificationToManager(
+    candidateId: number,
+  ): Promise<void> {
+    try {
+      const candidateManagerData = await this.candidateRepository.findManagerByCandidateId(candidateId);
+
+      if (!candidateManagerData) {
+        throw new UserNotFoundException();
+      }
+
+      const manager = candidateManagerData.jobShortlistedProfiles[0].manager;
+
+      if (!manager.managerEmail || manager.managerEmail.trim() === '') {
+        throw new BadRequestException(
+          'Manager email not found for this candidate',
+        );
+      }
+
+      const firstName = candidateManagerData.firstName || '';
+      const middleName = candidateManagerData.middleName;
+      const lastName = candidateManagerData.lastName || '';
+      const fullName = [firstName, middleName, lastName]
+        .filter(Boolean)
+        .join(' ');
+      const displayName = fullName || `Candidate ${candidateId}`;
+      const subject = `Interview Completion Notification – ${displayName} (Candidate ID: ${candidateId})`;
+
+      await this.mailService.send({
+        to: manager.managerEmail,
+        subject,
+        html: this.mailService.sendInterviewCompletionNotification(
+          firstName as string,
+          middleName as string | null,
+          lastName as string,
+          candidateManagerData.candidateId.toString(),
+          {
+            managerEmail: manager.managerEmail as string,
+            firstName: manager.firstName as string | null,
+            middleName: manager.middleName as string | null,
+            lastName: manager.lastName as string | null,
+            company: manager.company as string | null,
+            logoS3key: manager.logoS3key as string | null,
+          },
+        ),
+      });
+    } catch (error) {
+      if (
+        error instanceof UserNotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      console.error('Error sending interview completion notification:', error);
+
+      throw new InternalServerErrorException(
+        'Failed to send interview completion notification',
+      );
+    }
   }
 }
