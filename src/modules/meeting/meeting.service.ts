@@ -406,7 +406,7 @@ export class MeetingService {
     isInterviewFinishedEarlierDto: IsInterviewFinishedEarlierDto,
   ) {
     this.enhancedLogger.logSeparator('INTERVIEW FINISH PROCESS');
-    this.enhancedLogger.startTimer(`finish-interview-${scheduleId}`);
+    this.enhancedLogger.startTimer(`finish-interview-scheduleId-${scheduleId}`);
 
     const context = { scheduleId };
 
