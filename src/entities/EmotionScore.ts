@@ -1,4 +1,5 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Evaluation } from './Evaluation';
 
 @Index('emotion_score_pkey', ['emotionId'], { unique: true })
 @Entity('emotion_score', { schema: 'public' })
@@ -33,7 +34,7 @@ export class EmotionScore {
   // @JoinColumn([{ name: "config_id", referencedColumnName: "configId" }])
   // config: Config;
 
-  // @ManyToOne(() => Evaluation, (evaluation) => evaluation.emotionScores)
-  // @JoinColumn([{ name: "evaluation_id", referencedColumnName: "evaluationId" }])
-  // evaluation: Evaluation;
+  @ManyToOne(() => Evaluation, (evaluation) => evaluation.emotionScores)
+  @JoinColumn([{ name: "evaluation_id", referencedColumnName: "evaluationId" }])
+  evaluation: Evaluation;
 }

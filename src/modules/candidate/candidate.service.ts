@@ -30,6 +30,10 @@ import type { GetUsersDto } from './dtoes/get-users.dto';
 import { UpdatePasswordDto } from './dtoes/update-password.dto';
 import { UpdateUserDto } from './dtoes/update-user.dto';
 import { UserNotFoundException } from './exceptions/user-not-found.exception';
+import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepository';
+import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
+import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
+import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
 
 @Injectable()
 export class CandidateService {
@@ -40,7 +44,10 @@ export class CandidateService {
     public readonly evaluationRepository: EvaluationRepository,
     public readonly scheduleRepository: ScheduleRepository,
     public readonly interviewRepository: InterviewRepository,
-
+    public readonly emotionScoreRepository: EmotionScoreRepository,
+    public readonly communicationScoresRepository: CommunicationScoresRepository,
+    public readonly technicalScoresRepository: TechnicalScoresRepository,
+    public readonly vocabScoreRepository: VocabScoreRepository,
     public readonly loginRepository: LoginRepository,
     public readonly meetingService: MeetingService,
     public readonly s3Service: S3Service,
@@ -238,10 +245,36 @@ export class CandidateService {
 
     for (const interview of interviews) {
       if (interview.evaluations?.length) {
+        // First delete all score-related data associated with these evaluations
+        const evaluationIds = interview.evaluations.map((ev) => ev.evaluationId);
+        
+        // Delete emotion scores
         // eslint-disable-next-line no-await-in-loop
-        await this.evaluationRepository.delete(
-          interview.evaluations.map((ev) => ev.evaluationId),
-        );
+        await this.emotionScoreRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Delete communication scores
+        // eslint-disable-next-line no-await-in-loop
+        await this.communicationScoresRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Delete technical scores
+        // eslint-disable-next-line no-await-in-loop
+        await this.technicalScoresRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Then delete the evaluations
+        // eslint-disable-next-line no-await-in-loop
+        await this.evaluationRepository.delete(evaluationIds);
       }
 
       if (interview.dishonests?.length) {
@@ -251,6 +284,15 @@ export class CandidateService {
         );
       }
 
+      // Delete vocab scores associated with this interview
+      // eslint-disable-next-line no-await-in-loop
+      await this.vocabScoreRepository
+        .createQueryBuilder()
+        .delete()
+        .where('interview_id = :interviewId', { interviewId: interview.interviewId })
+        .execute();
+
+      // Finally delete the interview
       // eslint-disable-next-line no-await-in-loop
       await this.interviewRepository.delete(interview.interviewId);
     }

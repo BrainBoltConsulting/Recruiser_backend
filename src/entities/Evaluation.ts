@@ -4,11 +4,15 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 
 import { Interview } from './Interview';
 import { Questions } from './Questions';
+import { EmotionScore } from './EmotionScore';
+import { CommunicationScores } from './CommunicationScores';
+import { TechnicalScores } from './TechnicalScores';
 
 @Index('evaluation_pkey', ['evaluationId'], { unique: true })
 @Entity('evaluation', { schema: 'public' })
@@ -83,4 +87,13 @@ export class Evaluation {
   @ManyToOne(() => Questions, (questions) => questions.evaluations)
   @JoinColumn([{ name: 'question_id', referencedColumnName: 'questionId' }])
   question: Questions;
+
+  @OneToMany(() => EmotionScore, (emotionScore) => emotionScore.evaluation)
+  emotionScores: EmotionScore[];
+
+  @OneToMany(() => CommunicationScores, (communicationScores) => communicationScores.evaluation)
+  communicationScores: CommunicationScores[];
+
+  @OneToMany(() => TechnicalScores, (technicalScores) => technicalScores.evaluation)
+  technicalScores: TechnicalScores[];
 }

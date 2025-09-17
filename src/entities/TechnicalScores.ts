@@ -32,7 +32,10 @@ export class TechnicalScores {
   @Column("boolean", { name: "is_deleted", default: () => "false" })
   isDeleted: boolean;
 
-  // @ManyToOne(() => Evaluation, (evaluation) => evaluation.technicalScores)
-  // @JoinColumn([{ name: "evaluation_id", referencedColumnName: "evaluationId" }])
-  // evaluation: Evaluation;
+  @Column("bigint", { name: "evaluation_id", nullable: true })
+  evaluationId: string | null;
+
+  @ManyToOne(() => Evaluation, (evaluation) => evaluation.technicalScores)
+  @JoinColumn([{ name: "evaluation_id", referencedColumnName: "evaluationId" }])
+  evaluation: Evaluation;
 }
