@@ -11,6 +11,7 @@ import { Transactional } from 'typeorm-transactional';
 
 import { LogCategory } from '../../constants/logger-type.enum';
 import { MessageTypeEnum } from '../../constants/message.enum';
+import { CompletionReasonEnum, CompletionTypeEnum } from '../../constants/completion-reason.enum';
 import {
   DAY_NAMES,
   REPORT_BREAKDOWNS,
@@ -410,13 +411,47 @@ export class MeetingService {
 
     const context = { scheduleId };
 
+    const completionReason = isInterviewFinishedEarlierDto.completionReason || CompletionReasonEnum.NORMAL;
+    
     this.enhancedLogger.interviewEvent('🏁 Starting interview finish process', {
       ...context,
       metadata: {
-        isFinishedEarlier:
-          isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
+        isFinishedEarlier: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
+        completionReason: completionReason,
+        completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL
       },
     });
+
+    // Add specific logging based on completion reason
+    if (completionReason === CompletionReasonEnum.TAB_CLOSE) {
+      this.enhancedLogger.warn(
+        LogCategory.INTERVIEW,
+        '🚨 Interview completed due to TAB CLOSE - user closed browser tab',
+        {
+          ...context,
+          metadata: {
+            completionReason: CompletionReasonEnum.TAB_CLOSE,
+            warningType: 'tab_close_completion',
+            requiresAttention: true
+          }
+        },
+        'MeetingService'
+      );
+    } else if (isInterviewFinishedEarlierDto.isInterviewFinishedEarlier) {
+      this.enhancedLogger.warn(
+        LogCategory.INTERVIEW,
+        '⚠️ Interview completed early',
+        {
+          ...context,
+          metadata: {
+            completionReason: completionReason,
+            warningType: 'early_completion',
+            requiresAttention: true
+          }
+        },
+        'MeetingService'
+      );
+    }
 
     this.enhancedLogger.startTimer(`db-fetch-schedule-${scheduleId}`);
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
@@ -586,7 +621,7 @@ export class MeetingService {
     );
 
     const totalDuration = this.enhancedLogger.endTimer(
-      `finish-interview-${scheduleId}`,
+      `finish-interview-scheduleId-${scheduleId}`,
       LogCategory.INTERVIEW,
       'Interview finish process completed',
       {
@@ -596,22 +631,37 @@ export class MeetingService {
         metadata: {
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
           finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+          completionReason: completionReason,
+          completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
           totalOperations:
             Object.keys(interviewEntityUpdate).length > 0 ? 4 : 3, // DB queries + optional update + Slack
         },
       },
     );
 
+    // Final summary with completion type
+    let finalMessage;
+    if (completionReason === CompletionReasonEnum.TAB_CLOSE) {
+      finalMessage = `🚨 Interview completed due to TAB CLOSE! Total processing time: ${totalDuration.toFixed(2)}ms`;
+    } else if (isInterviewFinishedEarlierDto.isInterviewFinishedEarlier) {
+      finalMessage = `⚠️ Interview completed EARLY! Total processing time: ${totalDuration.toFixed(2)}ms`;
+    } else {
+      finalMessage = `🎉 Interview finished successfully! Total processing time: ${totalDuration.toFixed(2)}ms`;
+    }
+
     this.enhancedLogger.success(
       LogCategory.INTERVIEW,
-      `🎉 Interview finished successfully! Total processing time: ${totalDuration.toFixed(
-        2,
-      )}ms`,
+      finalMessage,
       {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         candidateId: candidate.candidateId.toString(),
         scheduleId,
         duration: totalDuration,
+        metadata: {
+          completionReason: completionReason,
+          completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
+          finishedEarly: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
+        }
       },
       'MeetingService',
     );
