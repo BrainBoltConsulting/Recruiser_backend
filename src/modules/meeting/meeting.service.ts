@@ -604,6 +604,7 @@ export class MeetingService {
         browser: interviewEntityByCandidateId.browserName,
         attendedTime: scheduleEntity.attendedDatetime,
         finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+        completionReason: completionReason,
         evaluations: interviewEntityByCandidateId.evaluations,
         dishonests: interviewEntityByCandidateId.dishonests,
       }),
