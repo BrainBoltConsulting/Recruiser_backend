@@ -821,9 +821,7 @@ export class MeetingService {
       'MeetingService',
     );
 
-    const fileName = `SId-${scheduleId}-QId-${questionId}-CId-${
-      candidate.candidateId
-    }-${Date.now()}`;
+    const fileName = `CId-${candidate.candidateId}-SId-${scheduleId}-QId-${questionId}-${Date.now()}`;
 
     this.enhancedLogger.info(
       LogCategory.UPLOAD,
