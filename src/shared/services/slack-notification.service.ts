@@ -61,17 +61,50 @@ export class SlackNotificationService {
     browser: string;
     attendedTime: Date;
     finishedEarly: boolean;
+    completionReason?: string;
     evaluations: { questionId: string; videofileS3key: string }[];
     dishonests: { switchCount: number, questionId: string }[];
   }) {
     const totalSwitches = interview.dishonests?.reduce((sum, d) => sum + Number(d.switchCount), 0);
+    
+    // Determine notification style based on completion reason
+    const getCompletionStyle = (reason?: string) => {
+      switch (reason) {
+        case 'TAB_CLOSE':
+          return {
+            emoji: '🚨',
+            title: 'Interview Terminated (Tab Close)',
+            color: '#FF4444'
+          };
+        case 'USER_EXIT':
+          return {
+            emoji: '⚠️',
+            title: 'Interview Completed Early (User Exit)',
+            color: '#FF8800'
+          };
+        case 'SYSTEM_ERROR':
+          return {
+            emoji: '❌',
+            title: 'Interview Error (System Error)',
+            color: '#CC0000'
+          };
+        default:
+          return {
+            emoji: '🎯',
+            title: 'Interview Completed Successfully',
+            color: '#00AA00'
+          };
+      }
+    };
+
+    const style = getCompletionStyle(interview.completionReason);
   
     const blocks: any[] = [
       {
         type: 'section',
         text: {
             type: 'mrkdwn',
-            text: '*🎯 New Interview Finished*',
+            text: `*${style.emoji} ${style.title}*`,
         },
       },
       {
@@ -91,6 +124,7 @@ export class SlackNotificationService {
           { type: 'mrkdwn', text: `*Browser:*\n${interview.browser}` },
           { type: 'mrkdwn', text: `*Attended:*\n${interview.attendedTime}` },
           { type: 'mrkdwn', text: `*Finished Early:*\n${interview.finishedEarly ? 'Yes' : 'No'}` },
+          { type: 'mrkdwn', text: `*Completion Reason:*\n${this.getCompletionReasonDisplay(interview.completionReason)}` },
           { type: 'mrkdwn', text: `*Total Switches (Cheating):*\n${totalSwitches}` },
         ],
       },
@@ -141,5 +175,19 @@ export class SlackNotificationService {
     }
 
     return blocks;
+  }
+
+  private getCompletionReasonDisplay(reason?: string): string {
+    switch (reason) {
+      case 'TAB_CLOSE':
+        return '🚨 Tab Close (User closed browser)';
+      case 'USER_EXIT':
+        return '⚠️ User Exit (Manual early exit)';
+      case 'SYSTEM_ERROR':
+        return '❌ System Error (Technical issue)';
+      case 'NORMAL':
+      default:
+        return '✅ Normal Completion';
+    }
   }
 }

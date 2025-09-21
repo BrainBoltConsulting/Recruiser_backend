@@ -18,6 +18,7 @@ import { AgoraModule } from './modules/agora/agora.module';
 import { QuestionModule } from './modules/question/question.module';
 import { MeetingModule } from './modules/meeting/meeting.module';
 import { S3Module } from './modules/s3/s3.module';
+import { LoggingModule } from './modules/logging/logging.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { S3Module } from './modules/s3/s3.module';
     QuestionModule,
     MeetingModule,
     S3Module,
+    LoggingModule,
     SkillModule,
     ConfigModule.forRoot({
       isGlobal: true,

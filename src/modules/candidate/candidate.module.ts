@@ -16,6 +16,10 @@ import { MeetingModule } from '../meeting/meeting.module';
 import { SkillModule } from '../skill/skill.module';
 import { CandidateController } from './candidate.controller';
 import { CandidateService } from './candidate.service';
+import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepository';
+import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
+import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
+import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
 
 @Module({
   imports: [
@@ -27,6 +31,10 @@ import { CandidateService } from './candidate.service';
       DishonestRepository,
       EvaluationRepository,
       ScheduleRepository,
+      EmotionScoreRepository,
+      CommunicationScoresRepository,
+      TechnicalScoresRepository,
+      VocabScoreRepository,
     ]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),

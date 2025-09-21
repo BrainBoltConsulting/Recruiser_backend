@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Transactional } from 'typeorm-transactional';
 
@@ -29,6 +30,10 @@ import type { GetUsersDto } from './dtoes/get-users.dto';
 import { UpdatePasswordDto } from './dtoes/update-password.dto';
 import { UpdateUserDto } from './dtoes/update-user.dto';
 import { UserNotFoundException } from './exceptions/user-not-found.exception';
+import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepository';
+import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
+import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
+import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
 
 @Injectable()
 export class CandidateService {
@@ -39,7 +44,10 @@ export class CandidateService {
     public readonly evaluationRepository: EvaluationRepository,
     public readonly scheduleRepository: ScheduleRepository,
     public readonly interviewRepository: InterviewRepository,
-
+    public readonly emotionScoreRepository: EmotionScoreRepository,
+    public readonly communicationScoresRepository: CommunicationScoresRepository,
+    public readonly technicalScoresRepository: TechnicalScoresRepository,
+    public readonly vocabScoreRepository: VocabScoreRepository,
     public readonly loginRepository: LoginRepository,
     public readonly meetingService: MeetingService,
     public readonly s3Service: S3Service,
@@ -157,7 +165,7 @@ export class CandidateService {
     // return (await this.candidateRepository.findById(id)).toDto({isAccess: true});
   }
 
-  async getAllUsers(getUsersDto: GetUsersDto): Promise<Candidate[]> {
+  async getAllUsers(_getUsersDto: GetUsersDto): Promise<Candidate[]> {
     const userEntitiesQuery = await this.candidateRepository.getAllSorted();
 
     // const [userEntities, pageMetaDto] = await userEntitiesQuery.paginate(
@@ -237,10 +245,36 @@ export class CandidateService {
 
     for (const interview of interviews) {
       if (interview.evaluations?.length) {
+        // First delete all score-related data associated with these evaluations
+        const evaluationIds = interview.evaluations.map((ev) => ev.evaluationId);
+        
+        // Delete emotion scores
         // eslint-disable-next-line no-await-in-loop
-        await this.evaluationRepository.delete(
-          interview.evaluations.map((ev) => ev.evaluationId),
-        );
+        await this.emotionScoreRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Delete communication scores
+        // eslint-disable-next-line no-await-in-loop
+        await this.communicationScoresRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Delete technical scores
+        // eslint-disable-next-line no-await-in-loop
+        await this.technicalScoresRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Then delete the evaluations
+        // eslint-disable-next-line no-await-in-loop
+        await this.evaluationRepository.delete(evaluationIds);
       }
 
       if (interview.dishonests?.length) {
@@ -250,10 +284,80 @@ export class CandidateService {
         );
       }
 
+      // Delete vocab scores associated with this interview
+      // eslint-disable-next-line no-await-in-loop
+      await this.vocabScoreRepository
+        .createQueryBuilder()
+        .delete()
+        .where('interview_id = :interviewId', { interviewId: interview.interviewId })
+        .execute();
+
+      // Finally delete the interview
       // eslint-disable-next-line no-await-in-loop
       await this.interviewRepository.delete(interview.interviewId);
     }
 
     return interviews;
+  }
+
+  @Transactional()
+  async sendInterviewCompletionNotificationToManager(
+    candidateId: number,
+  ): Promise<void> {
+    try {
+      const candidateManagerData = await this.candidateRepository.findManagerByCandidateId(candidateId);
+
+      if (!candidateManagerData) {
+        throw new UserNotFoundException();
+      }
+
+      const manager = candidateManagerData.jobShortlistedProfiles[0].manager;
+
+      if (!manager.managerEmail || manager.managerEmail.trim() === '') {
+        throw new BadRequestException(
+          'Manager email not found for this candidate',
+        );
+      }
+
+      const firstName = candidateManagerData.firstName || '';
+      const middleName = candidateManagerData.middleName;
+      const lastName = candidateManagerData.lastName || '';
+      const fullName = [firstName, middleName, lastName]
+        .filter(Boolean)
+        .join(' ');
+      const displayName = fullName || `Candidate ${candidateId}`;
+      const subject = `Interview Completion Notification – ${displayName} (Candidate ID: ${candidateId})`;
+
+      await this.mailService.send({
+        to: manager.managerEmail,
+        subject,
+        html: this.mailService.sendInterviewCompletionNotification(
+          firstName as string,
+          middleName as string | null,
+          lastName as string,
+          candidateManagerData.candidateId.toString(),
+          {
+            managerEmail: manager.managerEmail as string,
+            firstName: manager.firstName as string | null,
+            middleName: manager.middleName as string | null,
+            lastName: manager.lastName as string | null,
+            company: manager.company as string | null,
+            logoS3key: manager.logoS3key as string | null,
+          },
+        ),
+      });
+    } catch (error) {
+      if (
+        error instanceof UserNotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      console.error('Error sending interview completion notification:', error);
+
+      throw new InternalServerErrorException(
+        'Failed to send interview completion notification',
+      );
+    }
   }
 }

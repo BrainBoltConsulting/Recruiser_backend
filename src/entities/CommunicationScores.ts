@@ -1,4 +1,5 @@
-import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import { Evaluation } from './Evaluation';
 
 @Index('communication_scores_pkey', ['commScoreId'], { unique: true })
 @Entity('communication_scores', { schema: 'public' })
@@ -35,7 +36,10 @@ export class CommunicationScores {
   })
   isDeleted: boolean | null;
 
-  // @ManyToOne(() => Evaluation, (evaluation) => evaluation.communicationScores)
-  // @JoinColumn([{ name: "evaluation_id", referencedColumnName: "evaluationId" }])
-  // evaluation: Evaluation;
+  @Column('bigint', { name: 'evaluation_id', nullable: true })
+  evaluationId: string | null;
+
+  @ManyToOne(() => Evaluation, (evaluation) => evaluation.communicationScores)
+  @JoinColumn([{ name: "evaluation_id", referencedColumnName: "evaluationId" }])
+  evaluation: Evaluation;
 }

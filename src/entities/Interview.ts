@@ -12,6 +12,7 @@ import { Candidate } from './Candidate';
 import { Dishonest } from './Dishonest';
 import { Evaluation } from './Evaluation';
 import { Manager } from './Manager';
+import { VocabScore } from './VocabScore';
 
 @Index('interview_pkey', ['interviewId'], { unique: true })
 @Entity('interview', { schema: 'public' })
@@ -66,4 +67,7 @@ export class Interview {
   @ManyToOne(() => Manager, (manager) => manager.interviews)
   @JoinColumn([{ name: 'manager_id', referencedColumnName: 'managerId' }])
   manager: Manager;
+
+  @OneToMany(() => VocabScore, (vocabScore) => vocabScore.interview)
+  vocabScores: VocabScore[];
 }
