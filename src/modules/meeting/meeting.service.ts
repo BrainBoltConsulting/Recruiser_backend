@@ -685,8 +685,8 @@ export class MeetingService {
     );
 
     try {
-      // Get Cognito access token for authentication
-      const cognitoToken = await this.cognitoAuthService.getAccessToken();
+      // Get Cognito ID token for authentication
+      const cognitoIdToken = await this.cognitoAuthService.getIdToken();
       
       const processApiResponse = await axios.post(
         this.apiConfigService.processApiUrl,
@@ -699,7 +699,7 @@ export class MeetingService {
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'Content-Type': 'application/json',
             // eslint-disable-next-line @typescript-eslint/naming-convention
-            'Authorization': `Bearer ${cognitoToken}`,
+            'Authorization': `Bearer ${cognitoIdToken}`,
           },
         },
       );

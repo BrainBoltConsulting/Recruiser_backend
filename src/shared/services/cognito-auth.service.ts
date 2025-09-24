@@ -15,7 +15,7 @@ import { ApiConfigService } from './api-config.service';
 export class CognitoAuthService {
   private readonly logger = new Logger(CognitoAuthService.name);
   private cognitoClient: CognitoIdentityProviderClient;
-  private tokenCache: Map<string, { token: string; expiresAt: number }> = new Map();
+  private tokenCache: Map<string, { accessToken: string; idToken: string; expiresAt: number }> = new Map();
 
   constructor(private readonly apiConfigService: ApiConfigService) {
     const cognitoConfig = this.apiConfigService.cognitoConfig;
@@ -78,17 +78,17 @@ export class CognitoAuthService {
   }
 
   /**
-   * Authenticate with Cognito and get access token
-   * Uses cached token if still valid
+   * Authenticate with Cognito and get tokens
+   * Uses cached tokens if still valid
    */
-  async getAccessToken(): Promise<string> {
+  private async getTokens(): Promise<{ accessToken: string; idToken: string }> {
     const cacheKey = 'system_user_token';
     const cached = this.tokenCache.get(cacheKey);
     
-    // Check if cached token is still valid (with 5 minute buffer)
+    // Check if cached tokens are still valid (with 5 minute buffer)
     if (cached && cached.expiresAt > Date.now() + 5 * 60 * 1000) {
-      this.logger.debug('Using cached Cognito token');
-      return cached.token;
+      this.logger.debug('Using cached Cognito tokens');
+      return { accessToken: cached.accessToken, idToken: cached.idToken };
     }
 
     try {
@@ -161,22 +161,52 @@ export class CognitoAuthService {
         throw new Error('No access token received from Cognito');
       }
 
+      if (!response.AuthenticationResult?.IdToken) {
+        this.logger.error('No ID token in Cognito response:', {
+          hasAuthenticationResult: !!response.AuthenticationResult,
+          authenticationResult: response.AuthenticationResult,
+          challengeName: response.ChallengeName,
+          session: response.Session,
+        });
+        throw new Error('No ID token received from Cognito');
+      }
+
       const accessToken = response.AuthenticationResult.AccessToken;
+      const idToken = response.AuthenticationResult.IdToken;
       const expiresIn = response.AuthenticationResult.ExpiresIn || 3600; // Default to 1 hour
       const expiresAt = Date.now() + (expiresIn * 1000);
 
-      // Cache the token
+      // Cache both tokens
       this.tokenCache.set(cacheKey, {
-        token: accessToken,
+        accessToken,
+        idToken,
         expiresAt,
       });
 
       this.logger.debug('Successfully authenticated with Cognito');
-      return accessToken;
+      return { accessToken, idToken };
     } catch (error) {
       this.logger.error('Failed to authenticate with Cognito', error);
       throw new Error(`Cognito authentication failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Get access token
+   * Uses cached token if still valid
+   */
+  async getAccessToken(): Promise<string> {
+    const tokens = await this.getTokens();
+    return tokens.accessToken;
+  }
+
+  /**
+   * Get ID token
+   * Uses cached token if still valid
+   */
+  async getIdToken(): Promise<string> {
+    const tokens = await this.getTokens();
+    return tokens.idToken;
   }
 
   /**
