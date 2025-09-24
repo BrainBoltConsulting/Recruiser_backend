@@ -149,4 +149,15 @@ export class ApiConfigService {
   get processApiUrl() {
     return this.getString('PROCESS_API_URL');
   }
+
+  get cognitoConfig() {
+    return {
+      userPoolId: this.getString('COGNITO_USER_POOL_ID'),
+      clientId: this.getString('COGNITO_CLIENT_ID'),
+      clientSecret: this.getString('COGNITO_CLIENT_SECRET'),
+      systemUsername: this.getString('COGNITO_SYSTEM_USERNAME'),
+      systemPassword: this.getString('COGNITO_SYSTEM_PASSWORD'),
+      systemEmail: this.getString('COGNITO_SYSTEM_EMAIL'),
+    };
+  }
 }

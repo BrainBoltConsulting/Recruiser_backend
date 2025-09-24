@@ -34,6 +34,7 @@ import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { PollyService } from '../../shared/services/aws-polly.service';
 import { S3Service } from '../../shared/services/aws-s3.service';
+import { CognitoAuthService } from '../../shared/services/cognito-auth.service';
 import { EnhancedLoggerService } from '../../shared/services/enhanced-logger.service';
 import { MailService } from '../../shared/services/mail.service';
 import { SlackNotificationService } from '../../shared/services/slack-notification.service';
@@ -56,6 +57,7 @@ export class MeetingService {
     private readonly s3Service: S3Service,
     private readonly slackNotificationService: SlackNotificationService,
     private readonly apiConfigService: ApiConfigService,
+    private readonly cognitoAuthService: CognitoAuthService,
     private readonly candidateRepository: CandidateRepository,
     private readonly interviewRepository: InterviewRepository,
     private readonly scheduleRepository: ScheduleRepository,
@@ -683,6 +685,9 @@ export class MeetingService {
     );
 
     try {
+      // Get Cognito access token for authentication
+      const cognitoToken = await this.cognitoAuthService.getAccessToken();
+      
       const processApiResponse = await axios.post(
         this.apiConfigService.processApiUrl,
         {
@@ -693,6 +698,8 @@ export class MeetingService {
           headers: {
             // eslint-disable-next-line @typescript-eslint/naming-convention
             'Content-Type': 'application/json',
+            // eslint-disable-next-line @typescript-eslint/naming-convention
+            'Authorization': `Bearer ${cognitoToken}`,
           },
         },
       );
@@ -724,10 +731,13 @@ export class MeetingService {
         'MeetingService',
       );
     } catch (error) {
+      // Check if it's a Cognito authentication error
+      const isCognitoError = error.message?.includes('Cognito authentication failed');
+      
       this.enhancedLogger.endTimer(
         `process-api-call-${candidate.candidateId}`,
         LogCategory.API,
-        'Process API call failed',
+        isCognitoError ? 'Process API call failed - Cognito authentication error' : 'Process API call failed',
         {
           candidateId: candidate.candidateId.toString(),
           scheduleId,
@@ -735,6 +745,7 @@ export class MeetingService {
             error: error.message,
             statusCode: error.response?.status,
             errorData: error.response?.data,
+            isCognitoError,
           },
         },
       );
