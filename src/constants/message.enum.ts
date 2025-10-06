@@ -13,7 +13,8 @@ export enum MessageTypeEnum {
   USER_NOT_FOUND_IN_COMPANY = 'USER_NOT_FOUND_IN_COMPANY',
   CATEGORY_IS_NOT_FOUND = 'CATEGORY_IS_NOT_FOUND',
   TAB_SWITCH = 'TAB_SWITCH',
-  INTERVIEW_FINISHED = 'INTERVIEW_FINISHED'
+  INTERVIEW_FINISHED = 'INTERVIEW_FINISHED',
+  INTERVIEW_FINISHED_WITH_COGNITO_ERROR = 'INTERVIEW_FINISHED_WITH_COGNITO_ERROR'
 }
 
 export const messages = {
@@ -31,5 +32,6 @@ export const messages = {
   USER_IS_NOT_FOUND: "User is not found",
   CATEGORY_IS_NOT_FOUND: "Category is not found",
   TAB_SWITCH: "User switched tabs or minimized",
-  INTERVIEW_FINISHED: "Interview is successfully finished"
+  INTERVIEW_FINISHED: "Interview is successfully finished",
+  INTERVIEW_FINISHED_WITH_COGNITO_ERROR: "Interview finished successfully but with cognito error"
 }

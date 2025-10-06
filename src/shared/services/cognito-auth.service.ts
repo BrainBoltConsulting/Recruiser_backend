@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   CognitoIdentityProviderClient,
   InitiateAuthCommand,
@@ -17,7 +18,10 @@ export class CognitoAuthService {
   private cognitoClient: CognitoIdentityProviderClient;
   private tokenCache: Map<string, { accessToken: string; idToken: string; expiresAt: number }> = new Map();
 
-  constructor(private readonly apiConfigService: ApiConfigService) {
+  constructor(
+    private readonly apiConfigService: ApiConfigService,
+    private readonly configService: ConfigService,
+  ) {
     const cognitoConfig = this.apiConfigService.cognitoConfig;
     
     this.cognitoClient = new CognitoIdentityProviderClient({
@@ -59,14 +63,8 @@ export class CognitoAuthService {
     // and Cognito doesn't allow modifying an already provided email
     this.logger.debug('Skipping email attribute - user already has email set');
 
-    // Add SECRET_HASH if client secret is provided
-    if (cognitoConfig.clientSecret) {
-      challengeParams.ChallengeResponses.SECRET_HASH = this.calculateSecretHash(
-        cognitoConfig.systemUsername,
-        cognitoConfig.clientId,
-        cognitoConfig.clientSecret
-      );
-    }
+    // Skip SECRET_HASH entirely - this Cognito app client doesn't use client secrets
+    this.logger.debug('Skipping SECRET_HASH in challenge response - app client not configured for secrets');
 
     this.logger.debug('Challenge response parameters:', JSON.stringify(challengeParams, null, 2));
     
@@ -94,19 +92,21 @@ export class CognitoAuthService {
     try {
       const cognitoConfig = this.apiConfigService.cognitoConfig;
       
-      // Calculate SECRET_HASH if client secret is provided
+      // Debug log the Cognito config
+      this.logger.debug('Cognito config:', {
+        clientId: cognitoConfig.clientId,
+        userPoolId: cognitoConfig.userPoolId,
+        systemUsername: cognitoConfig.systemUsername
+      });
+      
+      // Set up authentication parameters
       const authParameters: Record<string, string> = {
         USERNAME: cognitoConfig.systemUsername,
         PASSWORD: cognitoConfig.systemPassword,
       };
 
-      if (cognitoConfig.clientSecret) {
-        authParameters.SECRET_HASH = this.calculateSecretHash(
-          cognitoConfig.systemUsername,
-          cognitoConfig.clientId,
-          cognitoConfig.clientSecret
-        );
-      }
+      // Skip SECRET_HASH entirely - this Cognito app client doesn't use client secrets
+      this.logger.debug('Skipping SECRET_HASH - app client not configured for secrets');
       
       // Try USER_PASSWORD_AUTH first, fallback to ADMIN_NO_SRP_AUTH
       let response;

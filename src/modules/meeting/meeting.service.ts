@@ -685,9 +685,20 @@ export class MeetingService {
     );
 
     try {
-      // Get Cognito ID token for authentication
+      // Try both ID token and access token since there's confusion about which one works
       const cognitoIdToken = await this.cognitoAuthService.getIdToken();
+      const cognitoAccessToken = await this.cognitoAuthService.getAccessToken();
       
+      this.logger.debug('Process API call details:', {
+        url: this.apiConfigService.processApiUrl,
+        candidateId: candidate.candidateId,
+        idTokenLength: cognitoIdToken?.length || 0,
+        accessTokenLength: cognitoAccessToken?.length || 0,
+        idTokenPrefix: cognitoIdToken?.substring(0, 20) + '...',
+        accessTokenPrefix: cognitoAccessToken?.substring(0, 20) + '...'
+      });
+      
+      // Use ID token as it works in the AWS Authorizer test
       const processApiResponse = await axios.post(
         this.apiConfigService.processApiUrl,
         {
@@ -731,6 +742,20 @@ export class MeetingService {
         'MeetingService',
       );
     } catch (error) {
+      // Enhanced error logging for Process API debugging
+      this.logger.error('Process API call failed with detailed error:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        headers: error.response?.headers,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
+      
       // Check if it's a Cognito authentication error
       const isCognitoError = error.message?.includes('Cognito authentication failed');
       
@@ -769,7 +794,12 @@ export class MeetingService {
         `Failed to call process API for candidate ${candidate.candidateId}: ${error.message}`,
         error.stack,
       );
+
+      return UtilsProvider.getMessageOverviewByType(
+        MessageTypeEnum.INTERVIEW_FINISHED_WITH_COGNITO_ERROR,
+      );
     }
+
 
     return UtilsProvider.getMessageOverviewByType(
       MessageTypeEnum.INTERVIEW_FINISHED,
