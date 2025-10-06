@@ -685,7 +685,6 @@ export class MeetingService {
     );
 
     try {
-      // Try both ID token and access token since there's confusion about which one works
       const cognitoIdToken = await this.cognitoAuthService.getIdToken();
       const cognitoAccessToken = await this.cognitoAuthService.getAccessToken();
       
