@@ -9,6 +9,7 @@ import { ApiConfigService } from './services/api-config.service';
 import { PollyService } from './services/aws-polly.service';
 import { S3Service } from './services/aws-s3.service';
 import { CloudWatchLoggerService } from './services/cloud-watch-logger.service';
+import { CognitoAuthService } from './services/cognito-auth.service';
 import { EnhancedLoggerService } from './services/enhanced-logger.service';
 import { MailService } from './services/mail.service';
 import { SlackNotificationService } from './services/slack-notification.service';
@@ -26,6 +27,7 @@ const providers = [
   SlackNotificationService,
   PollyService,
   EnhancedLoggerService,
+  CognitoAuthService,
 ];
 
 @Global()
