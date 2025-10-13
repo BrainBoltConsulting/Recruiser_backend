@@ -62,7 +62,7 @@ export class SlackNotificationService {
     attendedTime: Date;
     finishedEarly: boolean;
     completionReason?: string;
-    evaluations: { questionId: string; videofileS3key: string }[];
+    evaluations: { questionId: string; videofileS3key: string, videofilename: string }[];
     dishonests: { switchCount: number, questionId: string }[];
   }) {
     const totalSwitches = interview.dishonests?.reduce((sum, d) => sum + Number(d.switchCount), 0);
@@ -135,20 +135,50 @@ export class SlackNotificationService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*🎥 Evaluated Questions (${interview.evaluations?.length}):*`,
+          text: `*🎥 Evaluated Questions & Recordings (${interview.evaluations?.length}):*`,
         },
       });
   
       interview.evaluations.forEach((q, i) => {
+        const cameraRecording = UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofileS3key);
+        const screenRecording = UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofilename);
+        
+        // Question header
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Question ${i + 1}* (ID: ${q.questionId})`,
+          },
+        });
+        
+        // Camera and Screen recordings
         blocks.push({
           type: 'context',
           elements: [
             {
               type: 'mrkdwn',
-              text: `*Q${i + 1}:* ${q.questionId}  •  *Recording:* ${UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofileS3key)}`,
+              text: `📹 *Camera:* \`${cameraRecording}\``,
             },
           ],
         });
+        
+        blocks.push({
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `🖥️ *Screen:* \`${screenRecording}\``,
+            },
+          ],
+        });
+        
+        // Add divider between questions (except after the last one)
+        if (i < interview.evaluations.length - 1) {
+          blocks.push({
+            type: 'divider',
+          });
+        }
       });
     }
   

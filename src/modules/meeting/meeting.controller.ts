@@ -122,6 +122,32 @@ export class MeetingController {
 
   // tmp solution
   // @AuthWithoutRequiredUser()
+  @Post('/schedule/:scheduleId/questions/:questionId/screen-recording')
+  @UseInterceptors(FileInterceptor('videoFile'))
+  @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
+  @ApiFile([{ name: 'videoFile' }], {
+    okResponseData: {
+      description: 'screen-recording-for-question-by-meeting',
+    },
+  })
+  @HttpCode(HttpStatus.OK)
+  async saveScreenRecordingForQuestionByMeeting(
+    @Param('scheduleId') scheduleId: string,
+    @Param('questionId') questionId: string,
+    @UploadedFile() file: Express.Multer.File,
+    // @AuthUser() user: Candidate
+  ) {
+    // tmp solution
+    // return this.meetingService.saveScreenRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
+    return this.meetingService.saveScreenRecordingForQuestionByMeeting(
+      file,
+      scheduleId,
+      questionId,
+    );
+  }
+
+  // tmp solution
+  // @AuthWithoutRequiredUser()
   @Post('/schedule/:scheduleId/questions/:questionId/cheat-detected')
   @HttpCode(HttpStatus.OK)
   async saveCheatingForQuestionByMeeting(
