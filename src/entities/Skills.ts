@@ -7,6 +7,7 @@ import {
 } from "typeorm";
 import { CandidateSkills } from "./CandidateSkills";
 import { JobSkills } from "./JobSkills";
+import { Questions } from "./Questions";
 
 @Index("skills_pkey", ["skillId"], { unique: true })
 @Index("skills_skill_name_key", ["skillName"], { unique: true })
@@ -23,4 +24,7 @@ export class Skills {
 
   @OneToMany(() => JobSkills, (jobSkills) => jobSkills.skill)
   jobSkills: JobSkills[];
+
+  @OneToMany(() => Questions, (questions) => questions.primarySkill)
+  questions: Questions[];
 }
