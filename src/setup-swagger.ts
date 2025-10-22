@@ -10,6 +10,10 @@ export function setupSwagger(
     .setTitle('API')
     .setVersion(options.version)
     .addBearerAuth()
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'cognito',
+    )
     .addServer('/prod')
     .build();
     
@@ -17,6 +21,10 @@ export function setupSwagger(
     .setTitle('API')
     .setVersion(options.version)
     .addBearerAuth()
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'cognito',
+    )
     .build();
 
   let targetBuilder = documentBuilder;
