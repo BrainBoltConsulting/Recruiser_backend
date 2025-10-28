@@ -153,6 +153,8 @@ export class ApiConfigService {
   get cognitoConfig() {
     return {
       userPoolId: this.getString('COGNITO_USER_POOL_ID'),
+      systemUserPoolId: this.getString('COGNITO_SYSTEM_USER_POOL_ID'),
+      systemClientId: this.getString('COGNITO_SYSTEM_CLIENT_ID'),
       clientId: this.getString('COGNITO_CLIENT_ID'),
       systemUsername: this.getString('COGNITO_SYSTEM_USERNAME'),
       systemPassword: this.getString('COGNITO_SYSTEM_PASSWORD'),
