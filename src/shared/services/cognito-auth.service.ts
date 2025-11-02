@@ -50,7 +50,7 @@ export class CognitoAuthService {
     this.logger.debug('Handling NEW_PASSWORD_REQUIRED challenge');
     
     const challengeParams: RespondToAuthChallengeCommandInput = {
-      ClientId: cognitoConfig.clientId,
+      ClientId: cognitoConfig.systemClientId,
       ChallengeName: 'NEW_PASSWORD_REQUIRED',
       Session: challengeResponse.Session,
       ChallengeResponses: {
@@ -94,8 +94,8 @@ export class CognitoAuthService {
       
       // Debug log the Cognito config
       this.logger.debug('Cognito config:', {
-        clientId: cognitoConfig.clientId,
-        userPoolId: cognitoConfig.userPoolId,
+        systemClientId: cognitoConfig.systemClientId,
+        systemUserPoolId: cognitoConfig.systemUserPoolId,
         systemUsername: cognitoConfig.systemUsername
       });
       
@@ -115,7 +115,7 @@ export class CognitoAuthService {
         this.logger.debug('Trying USER_PASSWORD_AUTH flow');
         const params: InitiateAuthCommandInput = {
           AuthFlow: AuthFlowType.USER_PASSWORD_AUTH,
-          ClientId: cognitoConfig.clientId,
+          ClientId: cognitoConfig.systemClientId,
           AuthParameters: authParameters,
         };
         
@@ -129,7 +129,7 @@ export class CognitoAuthService {
           
           const params: InitiateAuthCommandInput = {
             AuthFlow: AuthFlowType.ADMIN_NO_SRP_AUTH,
-            ClientId: cognitoConfig.clientId,
+            ClientId: cognitoConfig.systemClientId,
             AuthParameters: authParameters,
           };
           

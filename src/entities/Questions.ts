@@ -2,6 +2,8 @@ import {
   Column,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
@@ -11,6 +13,7 @@ import { QuestionDto } from '../modules/common/modules/question/question.dto';
 import { Answers } from './Answers';
 import { Dishonest } from './Dishonest';
 import { Evaluation } from './Evaluation';
+import { Skills } from './Skills';
 
 @Index('questions_pkey', ['questionId'], { unique: true })
 @Entity('questions', { schema: 'public' })
@@ -63,6 +66,10 @@ export class Questions extends AbstractEntity<QuestionDto> {
 
   @OneToMany(() => Evaluation, (evaluation) => evaluation.question)
   evaluations: Evaluation[];
+
+  @ManyToOne(() => Skills)
+  @JoinColumn([{ name: 'primary_skill_id', referencedColumnName: 'skillId' }])
+  primarySkill: Skills;
 
   dtoClass = QuestionDto;
 }

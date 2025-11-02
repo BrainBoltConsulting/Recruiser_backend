@@ -9,6 +9,7 @@ export class QuestionsRepository extends Repository<Questions> {
 
   async findByPrimarySkillId(primarySkillId: number, questionsTakeNumber: string): Promise<Questions[] | null> {
     return this.createQueryBuilder('questions')
+      .leftJoinAndSelect('questions.primarySkill', 'primarySkill')
       .where('questions.primarySkillId = :primarySkillId', { primarySkillId })
       .take(Number(questionsTakeNumber)) // tmp solution
       .getMany();
@@ -16,12 +17,14 @@ export class QuestionsRepository extends Repository<Questions> {
 
   async getAllSorted(): Promise<Questions[]> {
     return this.createQueryBuilder('questions')
+      .leftJoinAndSelect('questions.primarySkill', 'primarySkill')
       .orderBy('questions.createdAt', 'DESC')
       .getMany();
   }
 
   async findById(id: string): Promise<Questions> {
     const entity = await this.createQueryBuilder('questions')
+      .leftJoinAndSelect('questions.primarySkill', 'primarySkill')
       .where('questions.questionId = :id', { id })
       .getOne();
 
@@ -34,6 +37,7 @@ export class QuestionsRepository extends Repository<Questions> {
 
   async findByIds(ids: string[]): Promise<Questions[]> {
     return this.createQueryBuilder('questions')
+      .leftJoinAndSelect('questions.primarySkill', 'primarySkill')
       .where("questions.questionId IN (:...ids)", { ids })
       .getMany();
   }
@@ -44,6 +48,7 @@ export class QuestionsRepository extends Repository<Questions> {
     }
 
     return this.createQueryBuilder("questions")
+      .leftJoinAndSelect('questions.primarySkill', 'primarySkill')
       .where("questions.difficulty_level = :level", { level: difficultyLevel })
       .andWhere("questions.primarySkillId = :skillId", { skillId })
       .orderBy("RANDOM()")

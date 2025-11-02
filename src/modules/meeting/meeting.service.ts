@@ -455,6 +455,7 @@ export class MeetingService {
       );
     }
 
+    // CRITICAL OPERATIONS - These must complete before returning response
     this.enhancedLogger.startTimer(`db-fetch-schedule-${scheduleId}`);
     const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
     this.enhancedLogger.endTimer(
@@ -575,58 +576,11 @@ export class MeetingService {
       );
     }
 
-    // Slack notification monitoring
-    this.enhancedLogger.notificationEvent(
-      '📢 Preparing Slack notification payload',
-      {
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        candidateId: candidate.candidateId.toString(),
-        scheduleId,
-        metadata: {
-          candidateName: `${candidate.firstName} ${candidate.lastName}`,
-          browser: interviewEntityByCandidateId.browserName,
-          finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-          evaluationsCount:
-            interviewEntityByCandidateId.evaluations?.length || 0,
-          dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0,
-        },
-      },
-    );
-
-    this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
-    await this.slackNotificationService.sendBlocks({
-      blocks: this.slackNotificationService.formatInterviewSlackPayload({
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        scheduleId: scheduleEntity.scheduleId,
-        jobId: scheduleEntity.jobId,
-        candidate: {
-          id: candidate.candidateId.toString(),
-          fullName: candidate.firstName + ' ' + candidate.lastName,
-        },
-        browser: interviewEntityByCandidateId.browserName,
-        attendedTime: scheduleEntity.attendedDatetime,
-        finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-        completionReason: completionReason,
-        evaluations: interviewEntityByCandidateId.evaluations,
-        dishonests: interviewEntityByCandidateId.dishonests,
-      }),
-    });
-
-    this.enhancedLogger.endTimer(
-      `slack-notification-${scheduleId}`,
-      LogCategory.NOTIFICATION,
-      'Slack notification sent successfully',
-      {
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        candidateId: candidate.candidateId.toString(),
-        scheduleId,
-      },
-    );
-
-    const totalDuration = this.enhancedLogger.endTimer(
+    // Log completion of critical operations
+    const criticalOperationsDuration = this.enhancedLogger.endTimer(
       `finish-interview-scheduleId-${scheduleId}`,
       LogCategory.INTERVIEW,
-      'Interview finish process completed',
+      'Critical operations completed - returning early response',
       {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         candidateId: candidate.candidateId.toString(),
@@ -636,173 +590,326 @@ export class MeetingService {
           finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
           completionReason: completionReason,
           completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
-          totalOperations:
-            Object.keys(interviewEntityUpdate).length > 0 ? 4 : 3, // DB queries + optional update + Slack
         },
       },
     );
 
-    // Final summary with completion type
-    let finalMessage;
-    if (completionReason === CompletionReasonEnum.TAB_CLOSE) {
-      finalMessage = `🚨 Interview completed due to TAB CLOSE! Total processing time: ${totalDuration.toFixed(2)}ms`;
-    } else if (isInterviewFinishedEarlierDto.isInterviewFinishedEarlier) {
-      finalMessage = `⚠️ Interview completed EARLY! Total processing time: ${totalDuration.toFixed(2)}ms`;
-    } else {
-      finalMessage = `🎉 Interview finished successfully! Total processing time: ${totalDuration.toFixed(2)}ms`;
-    }
-
-    this.enhancedLogger.success(
+    this.enhancedLogger.info(
       LogCategory.INTERVIEW,
-      finalMessage,
+      '🚀 Returning early response to frontend - background processing will continue',
       {
         interviewId: interviewEntityByCandidateId.interviewId.toString(),
         candidateId: candidate.candidateId.toString(),
         scheduleId,
-        duration: totalDuration,
+        duration: criticalOperationsDuration,
         metadata: {
           completionReason: completionReason,
           completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
-          finishedEarly: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
         }
       },
       'MeetingService',
     );
 
-    // Call process API with candidate ID
-    this.enhancedLogger.startTimer(`process-api-call-${candidate.candidateId}`);
+    // BACKGROUND OPERATIONS - These continue after response is sent
+    this.continueBackgroundProcessing(
+      scheduleId,
+      scheduleEntity,
+      candidate,
+      interviewEntityByCandidateId,
+      interviewEntityUpdate,
+      completionReason,
+      isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
+    ).catch(error => {
+      this.logger.error(
+        `Background processing failed for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
+        error.stack,
+      );
+    });
+
+    // Return immediate response
+    return UtilsProvider.getMessageOverviewByType(
+      MessageTypeEnum.INTERVIEW_FINISHED,
+    );
+  }
+
+  /**
+   * Continue background processing after returning early response
+   */
+  private async continueBackgroundProcessing(
+    scheduleId: string,
+    scheduleEntity: any,
+    candidate: any,
+    interviewEntityByCandidateId: any,
+    interviewEntityUpdate: Partial<Interview>,
+    completionReason: string,
+    isFinishedEarly: boolean
+  ): Promise<void> {
+    this.enhancedLogger.startTimer(`background-processing-${scheduleId}`);
     this.enhancedLogger.info(
-      LogCategory.API,
-      '🔄 Calling process API endpoint',
+      LogCategory.INTERVIEW,
+      '🔄 Starting background processing',
       {
+        interviewId: interviewEntityByCandidateId.interviewId.toString(),
         candidateId: candidate.candidateId.toString(),
         scheduleId,
         metadata: {
-          endpoint: this.apiConfigService.processApiUrl,
-        },
+          operations: ['slack_notification', 'process_api_call']
+        }
       },
       'MeetingService',
     );
 
     try {
-      const cognitoIdToken = await this.cognitoAuthService.getIdToken();
-      const cognitoAccessToken = await this.cognitoAuthService.getAccessToken();
-      
-      this.logger.debug('Process API call details:', {
-        url: this.apiConfigService.processApiUrl,
-        candidateId: candidate.candidateId,
-        idTokenLength: cognitoIdToken?.length || 0,
-        accessTokenLength: cognitoAccessToken?.length || 0,
-        idTokenPrefix: cognitoIdToken?.substring(0, 20) + '...',
-        accessTokenPrefix: cognitoAccessToken?.substring(0, 20) + '...'
-      });
-      
-      // Use ID token as it works in the AWS Authorizer test
-      const processApiResponse = await axios.post(
-        this.apiConfigService.processApiUrl,
+      // Slack notification (no delay needed since frontend ensures recordings are uploaded first)
+      this.enhancedLogger.notificationEvent(
+        '📢 Preparing Slack notification payload',
         {
-          candidateId: candidate.candidateId,
-        },
-        {
-          timeout: 30_000, // 30 seconds timeout
-          headers: {
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            'Content-Type': 'application/json',
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            'Authorization': `Bearer ${cognitoIdToken}`,
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            browser: interviewEntityByCandidateId.browserName,
+            finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+            evaluationsCount: interviewEntityByCandidateId.evaluations?.length || 0,
+            dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0,
+            vocabScoresCount: interviewEntityByCandidateId.vocabScores?.length || 0,
           },
         },
       );
+
+      this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
+      await this.slackNotificationService.sendBlocks({
+        blocks: this.slackNotificationService.formatInterviewSlackPayload({
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          scheduleId: scheduleEntity.scheduleId,
+          jobId: scheduleEntity.jobId,
+          candidate: {
+            id: candidate.candidateId.toString(),
+            fullName: candidate.firstName + ' ' + candidate.lastName,
+          },
+          browser: interviewEntityByCandidateId.browserName,
+          attendedTime: scheduleEntity.attendedDatetime,
+          finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+          completionReason: completionReason,
+          evaluations: interviewEntityByCandidateId.evaluations,
+          dishonests: interviewEntityByCandidateId.dishonests,
+        }),
+      });
 
       this.enhancedLogger.endTimer(
-        `process-api-call-${candidate.candidateId}`,
-        LogCategory.API,
-        'Process API call completed successfully',
+        `slack-notification-${scheduleId}`,
+        LogCategory.NOTIFICATION,
+        'Slack notification sent successfully',
         {
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
           scheduleId,
-          metadata: {
-            statusCode: processApiResponse.status,
-            responseData: processApiResponse.data,
-          },
         },
       );
 
-      this.enhancedLogger.success(
+      // Process API call
+      this.enhancedLogger.startTimer(`process-api-call-${candidate.candidateId}`);
+      this.enhancedLogger.info(
         LogCategory.API,
-        '✅ Process API call successful',
+        '🔄 Calling process API endpoint',
         {
           candidateId: candidate.candidateId.toString(),
           scheduleId,
           metadata: {
-            statusCode: processApiResponse.status,
+            endpoint: this.apiConfigService.processApiUrl,
           },
         },
         'MeetingService',
       );
-    } catch (error) {
-      // Enhanced error logging for Process API debugging
-      this.logger.error('Process API call failed with detailed error:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        headers: error.response?.headers,
-        data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers
-        }
-      });
-      
-      // Check if it's a Cognito authentication error
-      const isCognitoError = error.message?.includes('Cognito authentication failed');
-      
-      this.enhancedLogger.endTimer(
-        `process-api-call-${candidate.candidateId}`,
-        LogCategory.API,
-        isCognitoError ? 'Process API call failed - Cognito authentication error' : 'Process API call failed',
+
+      try {
+        const cognitoIdToken = await this.cognitoAuthService.getIdToken();
+        const cognitoAccessToken = await this.cognitoAuthService.getAccessToken();
+        
+        this.logger.debug('Process API call details:', {
+          url: this.apiConfigService.processApiUrl,
+          candidateId: candidate.candidateId,
+          idTokenLength: cognitoIdToken?.length || 0,
+          accessTokenLength: cognitoAccessToken?.length || 0,
+          idTokenPrefix: cognitoIdToken?.substring(0, 20) + '...',
+          accessTokenPrefix: cognitoAccessToken?.substring(0, 20) + '...'
+        });
+        
+        // Use ID token as it works in the AWS Authorizer test
+        const processApiResponse = await axios.post(
+          this.apiConfigService.processApiUrl,
+          {
+            candidateId: candidate.candidateId,
+          },
+          {
+            timeout: 30_000, // 30 seconds timeout
+            headers: {
+              // eslint-disable-next-line @typescript-eslint/naming-convention
+              'Content-Type': 'application/json',
+              // eslint-disable-next-line @typescript-eslint/naming-convention
+              'Authorization': `Bearer ${cognitoIdToken}`,
+            },
+          },
+        );
+
+        this.enhancedLogger.endTimer(
+          `process-api-call-${candidate.candidateId}`,
+          LogCategory.API,
+          'Process API call completed successfully',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              statusCode: processApiResponse.status,
+              responseData: processApiResponse.data,
+            },
+          },
+        );
+
+        this.enhancedLogger.success(
+          LogCategory.API,
+          '✅ Process API call successful',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              statusCode: processApiResponse.status,
+            },
+          },
+          'MeetingService',
+        );
+      } catch (error) {
+        // Enhanced error logging for Process API debugging
+        this.logger.error('Process API call failed with detailed error:', {
+          message: error.message,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          headers: error.response?.headers,
+          data: error.response?.data,
+          config: {
+            url: error.config?.url,
+            method: error.config?.method,
+            headers: error.config?.headers
+          }
+        });
+        
+        // Check if it's a Cognito authentication error
+        const isCognitoError = error.message?.includes('Cognito authentication failed');
+        
+        this.enhancedLogger.endTimer(
+          `process-api-call-${candidate.candidateId}`,
+          LogCategory.API,
+          isCognitoError ? 'Process API call failed - Cognito authentication error' : 'Process API call failed',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              error: error.message,
+              statusCode: error.response?.status,
+              errorData: error.response?.data,
+              isCognitoError,
+            },
+          },
+        );
+
+        this.enhancedLogger.error(
+          LogCategory.API,
+          '❌ Process API call failed',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              error: error.message,
+              statusCode: error.response?.status,
+            },
+          },
+          'MeetingService',
+        );
+
+        // Log the error but don't throw it to avoid breaking the background processing
+        this.logger.error(
+          `Failed to call process API for candidate ${candidate.candidateId}: ${error.message}`,
+          error.stack,
+        );
+      }
+
+      // Final summary
+      const totalBackgroundDuration = this.enhancedLogger.endTimer(
+        `background-processing-${scheduleId}`,
+        LogCategory.INTERVIEW,
+        'Background processing completed',
         {
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            candidateName: `${candidate.firstName} ${candidate.lastName}`,
+            finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+            completionReason: completionReason,
+            completionType: isFinishedEarly ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
+          },
+        },
+      );
+
+      // Final summary with completion type
+      let finalMessage;
+      if (completionReason === CompletionReasonEnum.TAB_CLOSE) {
+        finalMessage = `🚨 Interview completed due to TAB CLOSE! Background processing time: ${totalBackgroundDuration.toFixed(2)}ms`;
+      } else if (isFinishedEarly) {
+        finalMessage = `⚠️ Interview completed EARLY! Background processing time: ${totalBackgroundDuration.toFixed(2)}ms`;
+      } else {
+        finalMessage = `🎉 Interview finished successfully! Background processing time: ${totalBackgroundDuration.toFixed(2)}ms`;
+      }
+
+      this.enhancedLogger.success(
+        LogCategory.INTERVIEW,
+        finalMessage,
+        {
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          duration: totalBackgroundDuration,
+          metadata: {
+            completionReason: completionReason,
+            completionType: isFinishedEarly ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
+            finishedEarly: isFinishedEarly
+          }
+        },
+        'MeetingService',
+      );
+
+    } catch (error) {
+      this.enhancedLogger.endTimer(
+        `background-processing-${scheduleId}`,
+        LogCategory.INTERVIEW,
+        'Background processing failed',
+        {
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
           scheduleId,
           metadata: {
             error: error.message,
-            statusCode: error.response?.status,
-            errorData: error.response?.data,
-            isCognitoError,
           },
         },
       );
 
       this.enhancedLogger.error(
-        LogCategory.API,
-        '❌ Process API call failed',
+        LogCategory.INTERVIEW,
+        '❌ Background processing failed',
         {
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
           scheduleId,
           metadata: {
             error: error.message,
-            statusCode: error.response?.status,
           },
         },
         'MeetingService',
       );
 
-      // Log the error but don't throw it to avoid breaking the interview finish flow
-      this.logger.error(
-        `Failed to call process API for candidate ${candidate.candidateId}: ${error.message}`,
-        error.stack,
-      );
-
-      return UtilsProvider.getMessageOverviewByType(
-        MessageTypeEnum.INTERVIEW_FINISHED_WITH_COGNITO_ERROR,
-      );
+      throw error; // Re-throw to be caught by the caller
     }
-
-
-    return UtilsProvider.getMessageOverviewByType(
-      MessageTypeEnum.INTERVIEW_FINISHED,
-    );
   }
 
   async saveRecordingForQuestionByMeeting(
@@ -981,45 +1088,147 @@ export class MeetingService {
       );
     }
 
-    this.enhancedLogger.startTimer(`db-create-evaluation-${questionId}`);
+    this.enhancedLogger.startTimer(`db-find-or-create-evaluation-${questionId}`);
+    
+    // Use database transaction with advisory lock to prevent race conditions
+    const lockId = `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    
     this.enhancedLogger.info(
       LogCategory.DATABASE,
-      '💾 Creating evaluation entity for recorded response',
+      '🔒 Using database advisory lock to prevent race conditions',
       {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
         interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
         metadata: {
           questionId,
+          lockId,
           videoS3Uri: s3Uri.slice(0, 50) + '...',
         },
       },
       'MeetingService',
     );
 
-    const evaluationEntity = await this.evaluationRepository.save(
-      this.evaluationRepository.create({
-        questionId,
-        interviewId: interviewEntityByCandidateId?.interviewId, // tmp solution
-        videofileS3key: s3Uri,
-      }),
-    );
+    const queryRunner = this.evaluationRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    this.enhancedLogger.endTimer(
-      `db-create-evaluation-${questionId}`,
-      LogCategory.DATABASE,
-      'Evaluation entity created successfully',
-      {
-        candidateId: candidate.candidateId.toString(),
-        scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
-        metadata: {
-          evaluationId: evaluationEntity.evaluationId,
+    let evaluationEntity: any;
+
+    try {
+      // Acquire advisory lock
+      await queryRunner.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [lockId]);
+
+      // Now safely check and create/update
+      evaluationEntity = await queryRunner.manager.findOne('Evaluation', {
+        where: {
           questionId,
-          videoStored: true,
+          interviewId: interviewEntityByCandidateId?.interviewId,
         },
-      },
-    );
+      });
+
+      if (evaluationEntity) {
+        // Update existing
+        this.enhancedLogger.info(
+          LogCategory.DATABASE,
+          '🔄 Evaluation entity found, updating with camera recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              evaluationId: evaluationEntity.evaluationId,
+              questionId,
+              videoS3Uri: s3Uri.slice(0, 50) + '...',
+            },
+          },
+          'MeetingService',
+        );
+
+        evaluationEntity.videofileS3key = s3Uri;
+        evaluationEntity = await queryRunner.manager.save('Evaluation', evaluationEntity);
+
+        this.enhancedLogger.endTimer(
+          `db-find-or-create-evaluation-${questionId}`,
+          LogCategory.DATABASE,
+          'Evaluation entity updated successfully with camera recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              evaluationId: evaluationEntity.evaluationId,
+              questionId,
+              videoStored: true,
+              action: 'updated',
+            },
+          },
+        );
+      } else {
+        // Create new
+        this.enhancedLogger.info(
+          LogCategory.DATABASE,
+          '💾 Creating new evaluation entity for camera recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              questionId,
+              videoS3Uri: s3Uri.slice(0, 50) + '...',
+            },
+          },
+          'MeetingService',
+        );
+
+        evaluationEntity = await queryRunner.manager.save('Evaluation', {
+          questionId,
+          interviewId: interviewEntityByCandidateId?.interviewId,
+          videofileS3key: s3Uri,
+        });
+
+        this.enhancedLogger.endTimer(
+          `db-find-or-create-evaluation-${questionId}`,
+          LogCategory.DATABASE,
+          'Evaluation entity created successfully with camera recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              evaluationId: evaluationEntity.evaluationId,
+              questionId,
+              videoStored: true,
+              action: 'created',
+            },
+          },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      
+      this.enhancedLogger.error(
+        LogCategory.DATABASE,
+        '❌ Database operation failed for camera recording',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+          metadata: {
+            questionId,
+            error: error.message,
+          },
+        },
+        'MeetingService',
+      );
+      
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
 
     const totalDuration = this.enhancedLogger.endTimer(
       `save-recording-${scheduleId}-${questionId}`,
@@ -1041,6 +1250,364 @@ export class MeetingService {
     this.enhancedLogger.success(
       LogCategory.UPLOAD,
       `🎉 Video recording saved successfully! Total processing time: ${totalDuration.toFixed(
+        2,
+      )}ms`,
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        duration: totalDuration,
+        metadata: {
+          questionId,
+          evaluationId: evaluationEntity.evaluationId,
+          fileSizeMB: (file.size / 1024 / 1024).toFixed(2),
+          uploadSuccess: true,
+        },
+      },
+      'MeetingService',
+    );
+
+    return evaluationEntity;
+  }
+
+  async saveScreenRecordingForQuestionByMeeting(
+    file: Express.Multer.File,
+    scheduleId: string,
+    questionId: string,
+  ) {
+    this.enhancedLogger.logSeparator('SAVE SCREEN RECORDING');
+    this.enhancedLogger.startTimer(
+      `save-screen-recording-${scheduleId}-${questionId}`,
+    );
+
+    const context = { scheduleId };
+
+    this.enhancedLogger.uploadEvent(
+      '🖥️ Starting screen recording save process',
+      {
+        ...context,
+        metadata: {
+          questionId,
+          fileName: file.originalname,
+          fileSize: file.size,
+          mimeType: file.mimetype,
+          timestamp: new Date().toISOString(),
+        },
+      },
+    );
+
+    this.enhancedLogger.startTimer(`db-fetch-schedule-${scheduleId}`);
+    const scheduleEntity = await this.scheduleRepository.findById(scheduleId);
+    this.enhancedLogger.endTimer(
+      `db-fetch-schedule-${scheduleId}`,
+      LogCategory.DATABASE,
+      'Schedule entity retrieved for screen recording save',
+      {
+        scheduleId: scheduleEntity.scheduleId,
+        candidateId: scheduleEntity.candidateId.toString(),
+        metadata: {
+          jobId: scheduleEntity.jobId,
+        },
+      },
+    );
+
+    const candidate = scheduleEntity.candidate;
+    this.enhancedLogger.info(
+      LogCategory.UPLOAD,
+      `📤 Processing screen recording for candidate: ${candidate.firstName} ${candidate.lastName}`,
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        metadata: {
+          questionId,
+          email: candidate.email,
+        },
+      },
+      'MeetingService',
+    );
+
+    const fileName = `CId-${candidate.candidateId}-SId-${scheduleId}-QId-${questionId}-${Date.now()}-screen`;
+
+    this.enhancedLogger.info(
+      LogCategory.UPLOAD,
+      '📝 Generated structured filename for screen recording S3 upload',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        metadata: {
+          questionId,
+          generatedFileName: fileName,
+          originalFileName: file.originalname,
+          fileSize: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+        },
+      },
+      'MeetingService',
+    );
+
+    this.enhancedLogger.startTimer(`s3-screen-upload-${scheduleId}-${questionId}`);
+    this.enhancedLogger.uploadEvent('Uploading screen recording to S3', {
+      scheduleId,
+      candidateId: candidate.candidateId.toString(),
+      metadata: {
+        questionId,
+        fileName,
+        bucket: 'VideoInterviewFiles',
+        fileSize: file.size,
+      },
+    });
+
+    const responseFromS3 = await this.s3Service.uploadFile(
+      file,
+      'VideoInterviewFiles',
+      fileName,
+    );
+
+    this.enhancedLogger.endTimer(
+      `s3-screen-upload-${scheduleId}-${questionId}`,
+      LogCategory.UPLOAD,
+      'Screen recording uploaded to S3 successfully',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        metadata: {
+          questionId,
+          s3Bucket: responseFromS3.Bucket,
+          s3Key: responseFromS3.Key,
+          s3Location: responseFromS3.Location,
+          fileSize: file.size,
+        },
+      },
+    );
+
+    const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(
+      responseFromS3.Bucket,
+      responseFromS3.Key,
+    );
+
+    this.enhancedLogger.info(
+      LogCategory.UPLOAD,
+      '🔗 S3 URI generated for screen recording',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        metadata: {
+          questionId,
+          s3Uri: s3Uri.slice(0, 100) + '...', // Truncate for logging
+        },
+      },
+      'MeetingService',
+    );
+
+    this.enhancedLogger.startTimer(
+      `db-fetch-interview-${candidate.candidateId}`,
+    );
+    this.enhancedLogger.debug(
+      LogCategory.DATABASE,
+      '🔍 Fetching interview entity for evaluation update',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        metadata: { questionId },
+      },
+      'MeetingService',
+    );
+
+    const interviewEntityByCandidateId =
+      await this.interviewRepository.findByCandidateId(candidate.candidateId);
+
+    this.enhancedLogger.endTimer(
+      `db-fetch-interview-${candidate.candidateId}`,
+      LogCategory.DATABASE,
+      'Interview entity retrieved',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        metadata: {
+          questionId,
+          interviewFound: Boolean(interviewEntityByCandidateId),
+        },
+      },
+    );
+
+    if (!interviewEntityByCandidateId) {
+      this.enhancedLogger.error(
+        LogCategory.DATABASE,
+        '❌ Interview entity not found for candidate',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            questionId,
+            reason: 'interview_not_found',
+          },
+        },
+        'MeetingService',
+      );
+    }
+
+    this.enhancedLogger.startTimer(`db-find-or-create-evaluation-${questionId}`);
+    
+    // Use database transaction with advisory lock to prevent race conditions
+    const lockId = `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(/[^a-zA-Z0-9_]/g, '_');
+    
+    this.enhancedLogger.info(
+      LogCategory.DATABASE,
+      '🔒 Using database advisory lock to prevent race conditions',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        metadata: {
+          questionId,
+          lockId,
+          screenVideoS3Uri: s3Uri.slice(0, 50) + '...',
+        },
+      },
+      'MeetingService',
+    );
+
+    const queryRunner = this.evaluationRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let evaluationEntity: any;
+
+    try {
+      // Acquire advisory lock
+      await queryRunner.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [lockId]);
+
+      // Now safely check and create/update
+      evaluationEntity = await queryRunner.manager.findOne('Evaluation', {
+        where: {
+          questionId,
+          interviewId: interviewEntityByCandidateId?.interviewId,
+        },
+      });
+
+      if (evaluationEntity) {
+        // Update existing
+        this.enhancedLogger.info(
+          LogCategory.DATABASE,
+          '🔄 Evaluation entity found, updating with screen recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              evaluationId: evaluationEntity.evaluationId,
+              questionId,
+              screenVideoS3Uri: s3Uri.slice(0, 50) + '...',
+            },
+          },
+          'MeetingService',
+        );
+
+        evaluationEntity.videofilename = s3Uri;
+        evaluationEntity = await queryRunner.manager.save('Evaluation', evaluationEntity);
+
+        this.enhancedLogger.endTimer(
+          `db-find-or-create-evaluation-${questionId}`,
+          LogCategory.DATABASE,
+          'Evaluation entity updated successfully with screen recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              evaluationId: evaluationEntity.evaluationId,
+              questionId,
+              screenVideoStored: true,
+              action: 'updated',
+            },
+          },
+        );
+      } else {
+        // Create new
+        this.enhancedLogger.info(
+          LogCategory.DATABASE,
+          '💾 Creating new evaluation entity for screen recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              questionId,
+              screenVideoS3Uri: s3Uri.slice(0, 50) + '...',
+            },
+          },
+          'MeetingService',
+        );
+
+        evaluationEntity = await queryRunner.manager.save('Evaluation', {
+          questionId,
+          interviewId: interviewEntityByCandidateId?.interviewId,
+          videofilename: s3Uri,
+        });
+
+        this.enhancedLogger.endTimer(
+          `db-find-or-create-evaluation-${questionId}`,
+          LogCategory.DATABASE,
+          'Evaluation entity created successfully with screen recording',
+          {
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            metadata: {
+              evaluationId: evaluationEntity.evaluationId,
+              questionId,
+              screenVideoStored: true,
+              action: 'created',
+            },
+          },
+        );
+      }
+
+      await queryRunner.commitTransaction();
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      
+      this.enhancedLogger.error(
+        LogCategory.DATABASE,
+        '❌ Database operation failed for screen recording',
+        {
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+          metadata: {
+            questionId,
+            error: error.message,
+          },
+        },
+        'MeetingService',
+      );
+      
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    const totalDuration = this.enhancedLogger.endTimer(
+      `save-screen-recording-${scheduleId}-${questionId}`,
+      LogCategory.UPLOAD,
+      'Screen recording save process completed',
+      {
+        candidateId: candidate.candidateId.toString(),
+        scheduleId,
+        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        metadata: {
+          questionId,
+          evaluationId: evaluationEntity.evaluationId,
+          fileSize: file.size,
+          s3Location: responseFromS3.Location,
+        },
+      },
+    );
+
+    this.enhancedLogger.success(
+      LogCategory.UPLOAD,
+      `🎉 Screen recording saved successfully! Total processing time: ${totalDuration.toFixed(
         2,
       )}ms`,
       {

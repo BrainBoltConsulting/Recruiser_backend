@@ -12,9 +12,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { ApiFile } from '../../decorators/swagger.decorator';
+import { CognitoAuthGuard } from '../../guards/cognito-auth.guard';
 import { FileSizeGuard } from '../../guards/file-size.guard';
 import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
@@ -83,6 +84,8 @@ export class MeetingController {
   }
 
   @Post('/schedule/:scheduleId/invite')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth('cognito')
   @HttpCode(HttpStatus.OK)
   async sendInvitationToCandidate(
     @Param('scheduleId') scheduleId: string,
@@ -114,6 +117,32 @@ export class MeetingController {
     // tmp solution
     // return this.meetingService.saveRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
     return this.meetingService.saveRecordingForQuestionByMeeting(
+      file,
+      scheduleId,
+      questionId,
+    );
+  }
+
+  // tmp solution
+  // @AuthWithoutRequiredUser()
+  @Post('/schedule/:scheduleId/questions/:questionId/screen-recording')
+  @UseInterceptors(FileInterceptor('videoFile'))
+  @UseGuards(new FileSizeGuard(10 * 1024 * 1024))
+  @ApiFile([{ name: 'videoFile' }], {
+    okResponseData: {
+      description: 'screen-recording-for-question-by-meeting',
+    },
+  })
+  @HttpCode(HttpStatus.OK)
+  async saveScreenRecordingForQuestionByMeeting(
+    @Param('scheduleId') scheduleId: string,
+    @Param('questionId') questionId: string,
+    @UploadedFile() file: Express.Multer.File,
+    // @AuthUser() user: Candidate
+  ) {
+    // tmp solution
+    // return this.meetingService.saveScreenRecordingForQuestionByMeeting(file, scheduleId, questionId, user)
+    return this.meetingService.saveScreenRecordingForQuestionByMeeting(
       file,
       scheduleId,
       questionId,
@@ -174,6 +203,8 @@ export class MeetingController {
   }
 
   @Get('/manager/:managerId/report')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth('cognito')
   @HttpCode(HttpStatus.OK)
   async getManagerInterviewReport(
     @Param('managerId') managerId: string,

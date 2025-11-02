@@ -1,6 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 
 import { TypeOrmExModule } from '../../db/typeorm-ex.module';
+import { CognitoAuthGuard } from '../../guards/cognito-auth.guard';
 import { CandidateRepository } from '../../repositories/CandidateRepository';
 import { ConfigRepository } from '../../repositories/ConfigRepository';
 import { DishonestRepository } from '../../repositories/DishonestRepository';
@@ -38,7 +39,7 @@ import { MeetingService } from './meeting.service';
     forwardRef(() => CandidateModule),
     forwardRef(() => QuestionModule),
   ],
-  providers: [MeetingService, JwtStrategy],
+  providers: [MeetingService, JwtStrategy, CognitoAuthGuard],
   controllers: [MeetingController],
   exports: [MeetingService, JwtStrategy],
 })

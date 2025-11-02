@@ -9,6 +9,9 @@ export class QuestionDto {
   primarySkillId: number;
 
   @ApiProperty()
+  skillName: string;
+
+  @ApiProperty()
   subTech: string;
 
   @ApiProperty()
@@ -32,6 +35,7 @@ export class QuestionDto {
   constructor(question: Questions, options: {isForAdmin?: boolean, isAccess?: boolean, isExtended?: boolean}) {
     this.questionId = question.questionId;
     this.primarySkillId = question.primarySkillId;
+    this.skillName = question.primarySkill?.skillName;
     this.difficultyLevel = question.difficultyLevel;
     this.subTech = question.subTech;
     this.difficultyLevel = question.difficultyLevel;
