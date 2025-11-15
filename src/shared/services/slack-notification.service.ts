@@ -45,10 +45,45 @@ export class SlackNotificationService {
     }
   
     try {
+      // Validate blocks array
+      if (!blockPayload.blocks || !Array.isArray(blockPayload.blocks)) {
+        this.logger.error('Invalid blocks payload: blocks must be an array');
+        return;
+      }
+
+      // Check block count (Slack limit is 50 blocks per message)
+      if (blockPayload.blocks.length > 50) {
+        this.logger.error(`Block count exceeds Slack limit: ${blockPayload.blocks.length}/50 blocks`);
+        return;
+      }
+
       await axios.post(this.webhookUrl, blockPayload);
       this.logger.log('Slack block message sent.');
     } catch (error) {
-      this.logger.error('Failed to send Slack block message', error);
+      // Enhanced error logging for debugging
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const statusText = error.response?.statusText;
+        const responseData = error.response?.data;
+        
+        this.logger.error(`Failed to send Slack block message - Status: ${statusCode} ${statusText}`);
+        
+        // Log Slack's error response (usually contains specific validation errors)
+        if (responseData) {
+          this.logger.error(`Slack API Error Response: ${JSON.stringify(responseData, null, 2)}`);
+        }
+        
+        // Log the payload that caused the error (for debugging)
+        this.logger.error(`Payload sent (first 1000 chars): ${JSON.stringify(blockPayload).substring(0, 1000)}`);
+        this.logger.error(`Total blocks count: ${blockPayload.blocks?.length || 0}`);
+        
+        // Check for common issues
+        if (statusCode === 400) {
+          this.logger.error('Common 400 causes: Invalid block structure, missing required fields, message too long, or invalid field values');
+        }
+      } else {
+        this.logger.error('Failed to send Slack block message', error);
+      }
     }
   }
 
@@ -65,7 +100,25 @@ export class SlackNotificationService {
     evaluations: { questionId: string; videofileS3key: string, videofilename: string }[];
     dishonests: { switchCount: number, questionId: string }[];
   }) {
-    const totalSwitches = interview.dishonests?.reduce((sum, d) => sum + Number(d.switchCount), 0);
+    // Helper to safely format values and truncate if needed
+    const safeText = (value: any, maxLength: number = 3000): string => {
+      if (value === null || value === undefined) return 'N/A';
+      const text = String(value);
+      return text.length > maxLength ? text.substring(0, maxLength - 3) + '...' : text;
+    };
+
+    // Helper to format date safely
+    const formatDate = (date: Date | string | null | undefined): string => {
+      if (!date) return 'N/A';
+      try {
+        const d = date instanceof Date ? date : new Date(date);
+        return isNaN(d.getTime()) ? String(date) : d.toISOString();
+      } catch {
+        return String(date);
+      }
+    };
+
+    const totalSwitches = interview.dishonests?.reduce((sum, d) => sum + Number(d.switchCount), 0) || 0;
     
     // Determine notification style based on completion reason
     const getCompletionStyle = (reason?: string) => {
@@ -104,28 +157,29 @@ export class SlackNotificationService {
         type: 'section',
         text: {
             type: 'mrkdwn',
-            text: `*${style.emoji} ${style.title}*`,
+            text: safeText(`*${style.emoji} ${style.title}*`),
         },
       },
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `📋 Interview Summary: ${interview.candidate.fullName}`,
+          // Slack header text limit is 150 characters
+          text: safeText(`📋 Interview Summary: ${interview.candidate?.fullName || 'Unknown'}`, 150),
         },
       },
       {
         type: 'section',
         fields: [
-          { type: 'mrkdwn', text: `*Interview ID:*\n${interview.interviewId}` },
-          { type: 'mrkdwn', text: `*Schedule ID:*\n${interview.scheduleId}` },
-          { type: 'mrkdwn', text: `*Candidate ID:*\n${interview.candidate.id}` },
-          { type: 'mrkdwn', text: `*Job ID:*\n${interview.jobId}` },
-          { type: 'mrkdwn', text: `*Browser:*\n${interview.browser}` },
-          { type: 'mrkdwn', text: `*Attended:*\n${interview.attendedTime}` },
-          { type: 'mrkdwn', text: `*Finished Early:*\n${interview.finishedEarly ? 'Yes' : 'No'}` },
-          { type: 'mrkdwn', text: `*Completion Reason:*\n${this.getCompletionReasonDisplay(interview.completionReason)}` },
-          { type: 'mrkdwn', text: `*Total Switches (Cheating):*\n${totalSwitches}` },
+          { type: 'mrkdwn', text: safeText(`*Interview ID:*\n${interview.interviewId || 'N/A'}`) },
+          { type: 'mrkdwn', text: safeText(`*Schedule ID:*\n${interview.scheduleId || 'N/A'}`) },
+          { type: 'mrkdwn', text: safeText(`*Candidate ID:*\n${interview.candidate?.id || 'N/A'}`) },
+          { type: 'mrkdwn', text: safeText(`*Job ID:*\n${interview.jobId || 'N/A'}`) },
+          { type: 'mrkdwn', text: safeText(`*Browser:*\n${interview.browser || 'N/A'}`) },
+          { type: 'mrkdwn', text: safeText(`*Attended:*\n${formatDate(interview.attendedTime)}`) },
+          { type: 'mrkdwn', text: safeText(`*Finished Early:*\n${interview.finishedEarly ? 'Yes' : 'No'}`) },
+          { type: 'mrkdwn', text: safeText(`*Completion Reason:*\n${this.getCompletionReasonDisplay(interview.completionReason)}`) },
+          { type: 'mrkdwn', text: safeText(`*Total Switches (Cheating):*\n${totalSwitches}`) },
         ],
       },
     ];
@@ -135,20 +189,24 @@ export class SlackNotificationService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*🎥 Evaluated Questions & Recordings (${interview.evaluations?.length}):*`,
+          text: safeText(`*🎥 Evaluated Questions & Recordings (${interview.evaluations?.length}):*`),
         },
       });
   
       interview.evaluations.forEach((q, i) => {
-        const cameraRecording = UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofileS3key);
-        const screenRecording = UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofilename);
+        const cameraRecording = q.videofileS3key 
+          ? UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofileS3key)
+          : 'N/A';
+        const screenRecording = q.videofilename
+          ? UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofilename)
+          : 'N/A';
         
         // Question header
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `*Question ${i + 1}* (ID: ${q.questionId})`,
+            text: safeText(`*Question ${i + 1}* (ID: ${q.questionId || 'N/A'})`),
           },
         });
         
@@ -158,7 +216,7 @@ export class SlackNotificationService {
           elements: [
             {
               type: 'mrkdwn',
-              text: `📹 *Camera:* \`${cameraRecording}\``,
+              text: safeText(`📹 *Camera:* \`${cameraRecording}\``),
             },
           ],
         });
@@ -168,7 +226,7 @@ export class SlackNotificationService {
           elements: [
             {
               type: 'mrkdwn',
-              text: `🖥️ *Screen:* \`${screenRecording}\``,
+              text: safeText(`🖥️ *Screen:* \`${screenRecording}\``),
             },
           ],
         });
@@ -182,12 +240,12 @@ export class SlackNotificationService {
       });
     }
   
-    if (interview.dishonests.length) {
+    if (interview.dishonests && interview.dishonests.length > 0) {
       blocks.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*⚠️ Cheating Events (${interview.dishonests.length} entries):*`,
+          text: safeText(`*⚠️ Cheating Events (${interview.dishonests.length} entries):*`),
         },
       });
   
@@ -197,7 +255,7 @@ export class SlackNotificationService {
           elements: [
             {
               type: 'mrkdwn',
-              text: `*Q${i + 1}:* ${d.questionId}  •  *Switch count:* ${d.switchCount}`,
+              text: safeText(`*Q${i + 1}:* ${d.questionId || 'N/A'}  •  *Switch count:* ${d.switchCount || 0}`),
             },
           ],
         });
