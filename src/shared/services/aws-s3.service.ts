@@ -120,4 +120,34 @@ export class S3Service {
 
     return `https://${this.bucketName}.s3.amazonaws.com/${s3Key}`;
   }
+
+  /**
+   * Generate a presigned URL for email images with extended expiration time.
+   * Handles both S3 URI format (s3://bucket/key) and plain key format.
+   * @param s3KeyOrUri - Either an S3 URI or a plain S3 key
+   * @param expiresIn - Expiration time in seconds (default: 7 days for email images)
+   * @returns Presigned URL string
+   */
+  generatePresignedUrlForEmail(s3KeyOrUri: string | null, expiresIn: number = 60 * 60 * 24 * 7): string | null {
+    if (!s3KeyOrUri) {
+      return null;
+    }
+
+    // Check if it's already an S3 URI (starts with s3://)
+    let s3Key: string;
+    if (s3KeyOrUri.startsWith('s3://')) {
+      s3Key = UtilsProvider.replaceS3UriWithS3Key(this.bucketName, s3KeyOrUri);
+    } else {
+      // It's already a key
+      s3Key = s3KeyOrUri;
+    }
+
+    const params = {
+      Bucket: this.bucketName,
+      Key: s3Key,
+      Expires: expiresIn,
+    };
+
+    return this.s3.getSignedUrl('getObject', params);
+  }
 }

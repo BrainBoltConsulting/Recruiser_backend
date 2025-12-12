@@ -13,6 +13,7 @@ import { Questions } from './Questions';
 import { EmotionScore } from './EmotionScore';
 import { CommunicationScores } from './CommunicationScores';
 import { TechnicalScores } from './TechnicalScores';
+import { DishonestSs } from './DishonestSs';
 
 @Index('evaluation_pkey', ['evaluationId'], { unique: true })
 @Entity('evaluation', { schema: 'public' })
@@ -96,4 +97,7 @@ export class Evaluation {
 
   @OneToMany(() => TechnicalScores, (technicalScores) => technicalScores.evaluation)
   technicalScores: TechnicalScores[];
+
+  @OneToMany(() => DishonestSs, (dishonestSs) => dishonestSs.evaluation)
+  dishonestSs: DishonestSs[];
 }

@@ -34,6 +34,7 @@ import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepositor
 import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
 import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
 import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
+import { DishonestSsRepository } from '../../repositories/DishonestSsRepository';
 
 @Injectable()
 export class CandidateService {
@@ -48,6 +49,7 @@ export class CandidateService {
     public readonly communicationScoresRepository: CommunicationScoresRepository,
     public readonly technicalScoresRepository: TechnicalScoresRepository,
     public readonly vocabScoreRepository: VocabScoreRepository,
+    public readonly dishonestSsRepository: DishonestSsRepository,
     public readonly loginRepository: LoginRepository,
     public readonly meetingService: MeetingService,
     public readonly s3Service: S3Service,
@@ -267,6 +269,14 @@ export class CandidateService {
         // Delete technical scores
         // eslint-disable-next-line no-await-in-loop
         await this.technicalScoresRepository
+          .createQueryBuilder()
+          .delete()
+          .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
+          .execute();
+
+        // Delete dishonest_ss records
+        // eslint-disable-next-line no-await-in-loop
+        await this.dishonestSsRepository
           .createQueryBuilder()
           .delete()
           .where('evaluation_id IN (:...evaluationIds)', { evaluationIds })
