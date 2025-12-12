@@ -35,8 +35,7 @@ interface CognitoTokenPayload {
 @Injectable()
 export class CognitoJwtVerifier {
   private readonly logger = new Logger(CognitoJwtVerifier.name);
-  private jwksCache: JWKS | null = null;
-  private jwksCacheExpiry: number = 0;
+  private jwksCache: Map<string, { jwks: JWKS; expiry: number }> = new Map();
   private readonly JWKS_CACHE_DURATION = 3600 * 1000; // 1 hour in milliseconds
 
   constructor(
@@ -45,19 +44,21 @@ export class CognitoJwtVerifier {
   ) {}
 
   /**
-   * Get the JWKS (JSON Web Key Set) from Cognito
+   * Get the JWKS (JSON Web Key Set) from Cognito for a specific user pool
    * Caches the result to avoid repeated requests
    */
-  private async getJWKS(): Promise<JWKS> {
+  private async getJWKS(userPoolId: string): Promise<JWKS> {
+    const cacheKey = userPoolId;
+    const cached = this.jwksCache.get(cacheKey);
+    
     // Return cached JWKS if still valid
-    if (this.jwksCache && Date.now() < this.jwksCacheExpiry) {
-      this.logger.debug('Using cached JWKS');
-      return this.jwksCache;
+    if (cached && Date.now() < cached.expiry) {
+      this.logger.debug(`Using cached JWKS for user pool: ${userPoolId}`);
+      return cached.jwks;
     }
 
-    const cognitoConfig = this.apiConfigService.cognitoConfig;
     const region = this.apiConfigService.awsConfig.region;
-    const jwksUrl = `https://cognito-idp.${region}.amazonaws.com/${cognitoConfig.userPoolId}/.well-known/jwks.json`;
+    const jwksUrl = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
 
     this.logger.debug(`Fetching JWKS from: ${jwksUrl}`);
 
@@ -75,10 +76,12 @@ export class CognitoJwtVerifier {
               const jwks = JSON.parse(data) as JWKS;
               
               // Cache the JWKS
-              this.jwksCache = jwks;
-              this.jwksCacheExpiry = Date.now() + this.JWKS_CACHE_DURATION;
+              this.jwksCache.set(cacheKey, {
+                jwks,
+                expiry: Date.now() + this.JWKS_CACHE_DURATION,
+              });
               
-              this.logger.debug('JWKS fetched and cached successfully');
+              this.logger.debug(`JWKS fetched and cached successfully for user pool: ${userPoolId}`);
               resolve(jwks);
             } catch (error) {
               this.logger.error('Failed to parse JWKS', error);
@@ -205,73 +208,115 @@ export class CognitoJwtVerifier {
 
   /**
    * Verify a Cognito JWT token
+   * Supports tokens from both regular user pool and system user pool
    * @param token - The JWT token to verify
    * @returns The decoded token payload
    * @throws Error if token is invalid
    */
   async verify(token: string): Promise<CognitoTokenPayload> {
-    try {
-      // Decode token header to get the key ID (kid)
-      const decodedHeader = jwt.decode(token, { complete: true });
-      
-      if (!decodedHeader || typeof decodedHeader === 'string') {
-        throw new Error('Invalid token format');
-      }
-
-      const kid = decodedHeader.header.kid;
-      if (!kid) {
-        throw new Error('Token does not have a key ID');
-      }
-
-      // Get JWKS and find the matching key
-      const jwks = await this.getJWKS();
-      const jwk = jwks.keys.find((key) => key.kid === kid);
-
-      if (!jwk) {
-        throw new Error(`No matching key found for kid: ${kid}`);
-      }
-
-      // Convert JWK to PEM
-      const pem = this.jwkToPem(jwk);
-
-      // Verify the token
-      const cognitoConfig = this.apiConfigService.cognitoConfig;
-      const region = this.apiConfigService.awsConfig.region;
-      const issuer = `https://cognito-idp.${region}.amazonaws.com/${cognitoConfig.userPoolId}`;
-
-      const decoded = jwt.verify(token, pem, {
-        algorithms: ['RS256'],
-        issuer: issuer,
-      }) as CognitoTokenPayload;
-
-      // Additional validations
-      if (decoded.token_use !== 'id' && decoded.token_use !== 'access') {
-        throw new Error(`Invalid token_use: ${decoded.token_use}`);
-      }
-
-      // Verify client_id or aud matches
-      if (decoded.client_id && decoded.client_id !== cognitoConfig.clientId) {
-        throw new Error('Token client_id does not match');
-      }
-
-      if (decoded.aud && decoded.aud !== cognitoConfig.clientId) {
-        throw new Error('Token audience does not match');
-      }
-
-      this.logger.debug(`Token verified successfully for user: ${decoded.sub}`);
-      return decoded;
-    } catch (error) {
-      this.logger.error(`Token verification failed: ${error.message}`);
-      throw error;
+    // Decode token header to get the key ID (kid)
+    const decodedHeader = jwt.decode(token, { complete: true });
+    
+    if (!decodedHeader || typeof decodedHeader === 'string') {
+      throw new Error('Invalid token format');
     }
+
+    const kid = decodedHeader.header.kid;
+    if (!kid) {
+      throw new Error('Token does not have a key ID');
+    }
+
+    const cognitoConfig = this.apiConfigService.cognitoConfig;
+    const region = this.apiConfigService.awsConfig.region;
+    
+    // Try both user pools - regular user pool first, then system user pool
+    const userPools = [
+      { id: cognitoConfig.userPoolId, clientId: cognitoConfig.clientId, name: 'regular' },
+    ];
+    
+    // Add system user pool if it's configured and different from regular pool
+    if (
+      cognitoConfig.systemUserPoolId &&
+      cognitoConfig.systemUserPoolId !== cognitoConfig.userPoolId
+    ) {
+      userPools.push({
+        id: cognitoConfig.systemUserPoolId,
+        clientId: cognitoConfig.systemClientId,
+        name: 'system',
+      });
+    }
+
+    let lastError: Error | null = null;
+
+    for (const userPool of userPools) {
+      try {
+        // Get JWKS and find the matching key
+        const jwks = await this.getJWKS(userPool.id);
+        const jwk = jwks.keys.find((key) => key.kid === kid);
+
+        if (!jwk) {
+          // Key not found in this pool, try next pool
+          continue;
+        }
+
+        // Convert JWK to PEM
+        const pem = this.jwkToPem(jwk);
+
+        // Verify the token
+        const issuer = `https://cognito-idp.${region}.amazonaws.com/${userPool.id}`;
+
+        const decoded = jwt.verify(token, pem, {
+          algorithms: ['RS256'],
+          issuer: issuer,
+        }) as CognitoTokenPayload;
+
+        // Additional validations
+        if (decoded.token_use !== 'id' && decoded.token_use !== 'access') {
+          throw new Error(`Invalid token_use: ${decoded.token_use}`);
+        }
+
+        // Verify client_id or aud matches (only for regular user pool tokens)
+        // System tokens might have different client_id, so we're more lenient
+        if (userPool.name === 'regular') {
+          if (decoded.client_id && decoded.client_id !== userPool.clientId) {
+            throw new Error('Token client_id does not match');
+          }
+
+          if (decoded.aud && decoded.aud !== userPool.clientId) {
+            throw new Error('Token audience does not match');
+          }
+        }
+
+        this.logger.debug(`Token verified successfully for user: ${decoded.sub} (${userPool.name} pool)`);
+        return decoded;
+      } catch (error) {
+        // If it's a key not found error, try the next pool
+        if (error.message?.includes('No matching key found') || error.message?.includes('invalid signature')) {
+          lastError = error;
+          continue;
+        }
+        // If it's a different error (like issuer mismatch), try next pool
+        if (error.message?.includes('issuer') || error.message?.includes('jwt expired')) {
+          lastError = error;
+          continue;
+        }
+        // For other errors, log and try next pool
+        lastError = error;
+        continue;
+      }
+    }
+
+    // If we get here, token couldn't be verified with either pool
+    const errorMessage = lastError?.message || 'Token verification failed';
+    this.logger.error(`Token verification failed for all user pools: ${errorMessage}`);
+    throw new Error(`Token verification failed: ${errorMessage}`);
   }
 
   /**
    * Clear the JWKS cache (useful for testing or when keys are rotated)
    */
   clearCache(): void {
-    this.jwksCache = null;
-    this.jwksCacheExpiry = 0;
+    this.jwksCache.clear();
     this.logger.debug('JWKS cache cleared');
   }
 }

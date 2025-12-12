@@ -11,6 +11,7 @@ import { MessageDto } from '../common/modules/shared/message.dto';
 import { Auth, AuthWithoutRequiredUser } from '../../decorators/http.decorator';
 import { AuthUser } from '../../decorators/auth.decorator';
 import { UserDto } from '../common/modules/user/user.dto';
+import { CognitoTokenResponseDto } from './dtos/cognito-token.dto';
 
 @Controller('/auth')
 @ApiTags('auth')
@@ -90,5 +91,15 @@ export class AuthController {
   // ): Promise<any> {
   //   return this.authService.setPassword(setPasswordDto);
   // }
+
+  @Get('/cognito-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: CognitoTokenResponseDto,
+    description: 'Returns Cognito ID token and Access token for API authentication',
+  })
+  async getCognitoToken(): Promise<CognitoTokenResponseDto> {
+    return this.authService.getCognitoTokens();
+  }
   
 }

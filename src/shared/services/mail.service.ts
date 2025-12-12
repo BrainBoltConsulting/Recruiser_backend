@@ -112,7 +112,7 @@ export class MailService {
             <div class="email-container">
                 <div class="header">
                 ${manager.logoS3key ? `<img src="${
-                  this.s3Service.generatePublicUrl(manager.logoS3key)
+                  this.s3Service.generatePresignedUrlForEmail(manager.logoS3key)
                 }" alt="Company Logo" style="width: 100px; height: 100px; display: block; margin: 0 auto;">` : ''}
                 <h1 style="text-align: center;">Welcome to ${
                   manager.company || 'Hire2o'
@@ -281,7 +281,7 @@ export class MailService {
             <div class="email-container">
                 <div class="header">
                 ${manager.logoS3key ? `<img src="${
-                  this.s3Service.generatePublicUrl(manager.logoS3key)
+                  this.s3Service.generatePresignedUrlForEmail(manager.logoS3key)
                 }" alt="Company Logo" style="width: 100px; height: 100px; display: block; margin: 0 auto;">` : ''}
                 <h1 style="text-align: center;">${
                   manager.company || 'Hire2o'

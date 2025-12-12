@@ -20,6 +20,7 @@ import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepositor
 import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
 import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
 import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
+import { DishonestSsRepository } from '../../repositories/DishonestSsRepository';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
       CommunicationScoresRepository,
       TechnicalScoresRepository,
       VocabScoreRepository,
+      DishonestSsRepository,
     ]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),
