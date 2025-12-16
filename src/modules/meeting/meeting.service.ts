@@ -659,9 +659,10 @@ export class MeetingService {
       'MeetingService',
     );
 
-    // Slack notification - wrapped in try-catch to ensure it doesn't break other background operations
-    let slackNotificationSuccess = false;
     try {
+      // Slack notification - wrapped in try-catch to ensure it doesn't break other background operations
+      let slackNotificationSuccess = false;
+      try {
       this.enhancedLogger.notificationEvent(
         '📢 Preparing Slack notification payload',
         {
@@ -745,7 +746,6 @@ export class MeetingService {
           },
         },
         'MeetingService',
-        error,
       );
       
       this.logger.error(
@@ -755,7 +755,7 @@ export class MeetingService {
       
       // Continue with other background operations even if Slack fails
       slackNotificationSuccess = false;
-    }
+      }
 
       // Process API call
       this.enhancedLogger.startTimer(`process-api-call-${candidate.candidateId}`);
@@ -927,7 +927,6 @@ export class MeetingService {
         },
         'MeetingService',
       );
-
     } catch (error) {
       this.enhancedLogger.endTimer(
         `background-processing-${scheduleId}`,

@@ -61,6 +61,10 @@ export class SlackNotificationService {
       return false;
     }
   
+    // Add timeout configuration (30 seconds, same as Process API)
+    const maxRetries = 3;
+    const timeout = 30_000; // 30 seconds
+
     try {
       // Validate blocks array
       if (!blockPayload.blocks || !Array.isArray(blockPayload.blocks)) {
@@ -73,10 +77,6 @@ export class SlackNotificationService {
         this.logger.error(`Block count exceeds Slack limit: ${blockPayload.blocks.length}/50 blocks`);
         return false;
       }
-
-      // Add timeout configuration (30 seconds, same as Process API)
-      const maxRetries = 3;
-      const timeout = 30_000; // 30 seconds
 
       await axios.post(this.webhookUrl, blockPayload, {
         timeout,
