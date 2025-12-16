@@ -31,59 +31,123 @@ export class SlackNotificationService {
     };
 
     try {
-      await axios.post(this.webhookUrl, payload);
+      // Add timeout configuration (30 seconds)
+      await axios.post(this.webhookUrl, payload, {
+        timeout: 30_000,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       this.logger.log('Slack notification sent.');
     } catch (error) {
-      this.logger.error('Failed to send Slack notification', error);
+      if (axios.isAxiosError(error)) {
+        const statusCode = error.response?.status;
+        const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+        const isNetworkError = !error.response && (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT');
+        
+        this.logger.error(
+          `Failed to send Slack notification - ${statusCode ? `Status: ${statusCode}` : ''} ` +
+          `${isTimeout ? 'Timeout' : isNetworkError ? 'Network Error' : error.message}`
+        );
+      } else {
+        this.logger.error('Failed to send Slack notification', error);
+      }
     }
   }
 
-  async sendBlocks(blockPayload: { blocks: any[] }) {
+  async sendBlocks(blockPayload: { blocks: any[] }, retryCount = 0): Promise<boolean> {
     if (!this.webhookUrl) {
       this.logger.warn('Slack webhook URL not set.');
-      return;
+      return false;
     }
   
     try {
       // Validate blocks array
       if (!blockPayload.blocks || !Array.isArray(blockPayload.blocks)) {
         this.logger.error('Invalid blocks payload: blocks must be an array');
-        return;
+        return false;
       }
 
       // Check block count (Slack limit is 50 blocks per message)
       if (blockPayload.blocks.length > 50) {
         this.logger.error(`Block count exceeds Slack limit: ${blockPayload.blocks.length}/50 blocks`);
-        return;
+        return false;
       }
 
-      await axios.post(this.webhookUrl, blockPayload);
-      this.logger.log('Slack block message sent.');
+      // Add timeout configuration (30 seconds, same as Process API)
+      const maxRetries = 3;
+      const timeout = 30_000; // 30 seconds
+
+      await axios.post(this.webhookUrl, blockPayload, {
+        timeout,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (retryCount > 0) {
+        this.logger.log(`Slack block message sent successfully after ${retryCount} retry(ies).`);
+      } else {
+        this.logger.log('Slack block message sent.');
+      }
+      return true;
     } catch (error) {
       // Enhanced error logging for debugging
       if (axios.isAxiosError(error)) {
         const statusCode = error.response?.status;
         const statusText = error.response?.statusText;
         const responseData = error.response?.data;
+        const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout');
+        const isNetworkError = !error.response && (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT');
         
-        this.logger.error(`Failed to send Slack block message - Status: ${statusCode} ${statusText}`);
+        // Retry logic for transient errors (network issues, timeouts, 5xx errors)
+        const shouldRetry = retryCount < maxRetries && (
+          isTimeout ||
+          isNetworkError ||
+          (statusCode && statusCode >= 500) || // Server errors
+          statusCode === 429 // Rate limit
+        );
+
+        if (shouldRetry) {
+          const retryDelay = Math.pow(2, retryCount) * 1000; // Exponential backoff: 1s, 2s, 4s
+          this.logger.warn(
+            `Slack notification failed (attempt ${retryCount + 1}/${maxRetries + 1}). ` +
+            `Retrying in ${retryDelay}ms... ` +
+            `Error: ${statusCode ? `${statusCode} ${statusText}` : error.message}`
+          );
+          
+          // Wait before retrying
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          
+          // Retry the request
+          return this.sendBlocks(blockPayload, retryCount + 1);
+        }
+        
+        // Final failure - log detailed error
+        this.logger.error(`Failed to send Slack block message after ${retryCount + 1} attempt(s) - Status: ${statusCode || 'N/A'} ${statusText || error.message}`);
         
         // Log Slack's error response (usually contains specific validation errors)
         if (responseData) {
           this.logger.error(`Slack API Error Response: ${JSON.stringify(responseData, null, 2)}`);
         }
         
-        // Log the payload that caused the error (for debugging)
-        this.logger.error(`Payload sent (first 1000 chars): ${JSON.stringify(blockPayload).substring(0, 1000)}`);
-        this.logger.error(`Total blocks count: ${blockPayload.blocks?.length || 0}`);
-        
-        // Check for common issues
-        if (statusCode === 400) {
-          this.logger.error('Common 400 causes: Invalid block structure, missing required fields, message too long, or invalid field values');
+        // Log the payload that caused the error (for debugging) - only on final failure
+        if (retryCount >= maxRetries) {
+          this.logger.error(`Payload sent (first 1000 chars): ${JSON.stringify(blockPayload).substring(0, 1000)}`);
+          this.logger.error(`Total blocks count: ${blockPayload.blocks?.length || 0}`);
+          
+          // Check for common issues
+          if (statusCode === 400) {
+            this.logger.error('Common 400 causes: Invalid block structure, missing required fields, message too long, or invalid field values');
+          } else if (statusCode === 429) {
+            this.logger.error('Slack rate limit exceeded - consider implementing rate limiting or using Slack API with higher limits');
+          }
         }
       } else {
         this.logger.error('Failed to send Slack block message', error);
       }
+      
+      return false;
     }
   }
 

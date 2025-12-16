@@ -659,8 +659,9 @@ export class MeetingService {
       'MeetingService',
     );
 
+    // Slack notification - wrapped in try-catch to ensure it doesn't break other background operations
+    let slackNotificationSuccess = false;
     try {
-      // Slack notification (no delay needed since frontend ensures recordings are uploaded first)
       this.enhancedLogger.notificationEvent(
         '📢 Preparing Slack notification payload',
         {
@@ -679,7 +680,7 @@ export class MeetingService {
       );
 
       this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
-      await this.slackNotificationService.sendBlocks({
+      slackNotificationSuccess = await this.slackNotificationService.sendBlocks({
         blocks: this.slackNotificationService.formatInterviewSlackPayload({
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           scheduleId: scheduleEntity.scheduleId,
@@ -697,16 +698,64 @@ export class MeetingService {
         }),
       });
 
-      this.enhancedLogger.endTimer(
+      const slackNotificationDuration = this.enhancedLogger.endTimer(
         `slack-notification-${scheduleId}`,
         LogCategory.NOTIFICATION,
-        'Slack notification sent successfully',
+        slackNotificationSuccess 
+          ? 'Slack notification sent successfully' 
+          : 'Slack notification failed after retries',
         {
           interviewId: interviewEntityByCandidateId.interviewId.toString(),
           candidateId: candidate.candidateId.toString(),
           scheduleId,
+          metadata: {
+            success: slackNotificationSuccess,
+          },
         },
       );
+
+      if (!slackNotificationSuccess) {
+        this.enhancedLogger.warn(
+          LogCategory.NOTIFICATION,
+          '⚠️ Slack notification failed after all retry attempts',
+          {
+            interviewId: interviewEntityByCandidateId.interviewId.toString(),
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              candidateName: `${candidate.firstName} ${candidate.lastName}`,
+              completionReason: completionReason,
+            },
+          },
+          'MeetingService',
+        );
+      }
+    } catch (error) {
+      // Catch any unexpected errors from Slack notification (shouldn't happen with new implementation)
+      this.enhancedLogger.error(
+        LogCategory.NOTIFICATION,
+        '❌ Unexpected error during Slack notification',
+        {
+          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          candidateId: candidate.candidateId.toString(),
+          scheduleId,
+          metadata: {
+            error: error.message,
+            errorStack: error.stack,
+          },
+        },
+        'MeetingService',
+        error,
+      );
+      
+      this.logger.error(
+        `Unexpected error sending Slack notification for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
+        error.stack,
+      );
+      
+      // Continue with other background operations even if Slack fails
+      slackNotificationSuccess = false;
+    }
 
       // Process API call
       this.enhancedLogger.startTimer(`process-api-call-${candidate.candidateId}`);
