@@ -3,116 +3,179 @@ name: Deploy NestJS to EC2 (Amazon Linux)
 on:
   push:
     branches:
-      - master  
+      - master
+
+permissions:
+  -tokiden: write  # Required for OIDC
+  contents: read   # To checkout the repository
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
-
-      - name: SSH into EC2 and Deploy
-        uses: appleboy/ssh-action@v0.1.10
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          script: |
-            echo "Starting Deployment..."
-
-            PROJECT_DIR="/home/ec2-user/recruiser/recruiser_backend"
-            SERVICE_NAME="interview_api"
-
-            # Ensure project directory exists
-            sudo mkdir -p "$PROJECT_DIR"
-            sudo chown ec2-user:ec2-user "$PROJECT_DIR"
-
-            # Clone or update repo
-            if [ ! -d "$PROJECT_DIR" ]; then
-              git clone git@github.com:BrainBoltConsulting/Recruiser_backend.git "$PROJECT_DIR"
-            else
-              cd "$PROJECT_DIR"
-              git pull origin master || { echo 'Git pull failed. Exiting...'; exit 1; }
-            fi
-
-            cd "$PROJECT_DIR"
-
-            # Copy .temp.env to .env
-            if [ -f "../.temp.env" ]; then
-              cp ../.temp.env .env
-            else
-              echo "ERROR: .temp.env file is missing! Exiting..."
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1  # Change to your region
+      
+      - name: Deploy to EC2 via SSM
+        run: |
+          INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"  # Add this to GitHub secrets
+          
+          echo "Starting deployment to instance $INSTANCE_ID..."
+          
+          # Send deployment command via SSM
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy NestJS application from GitHub Actions" \
+            --parameters 'commands=[
+              "#!/bin/bash",
+              "set -e",
+              "echo \"Starting Deployment...\"",
+              "PROJECT_DIR=\"/home/ec2-user/recruiser/recruiser_backend\"",
+              "SERVICE_NAME=\"interview_api\"",
+              "",
+              "# Ensure project directory exists",
+              "sudo mkdir -p \"$PROJECT_DIR\"",
+              "sudo chown ec2-user:ec2-user \"$PROJECT_DIR\"",
+              "",
+              "# Switch to ec2-user and execute deployment",
+              "sudo su - ec2-user -c \"",
+              "  cd $PROJECT_DIR || exit 1",
+              "",
+              "  # Clone or update repo",
+              "  if [ ! -d .git ]; then",
+              "    git clone git@github.com:BrainBoltConsulting/Recruiser_backend.git . || exit 1",
+              "  else",
+              "    git fetch origin",
+              "    git reset --hard origin/master || exit 1",
+              "  fi",
+              "",
+              "  # Copy .temp.env to .env",
+              "  if [ -f ../.temp.env ]; then",
+              "    cp ../.temp.env .env",
+              "  else",
+              "    echo ERROR: .temp.env file is missing! Exiting...",
+              "    exit 1",
+              "  fi",
+              "  echo Environment variables set successfully.",
+              "",
+              "  # Install dependencies",
+              "  npm install --force || exit 1",
+              "",
+              "  # Build the NestJS application",
+              "  npm run build:prod || exit 1",
+              "  echo Build completed successfully.",
+              "\"",
+              "",
+              "# Create systemd service file if it does not exist",
+              "if [ ! -f /etc/systemd/system/${SERVICE_NAME}.service ]; then",
+              "  echo Creating systemd service file...",
+              "  sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<EOF",
+              "[Unit]",
+              "Description=Interview Backend (Nest.js) Service",
+              "After=network.target",
+              "",
+              "[Service]",
+              "WorkingDirectory=${PROJECT_DIR}",
+              "ExecStart=/usr/bin/npm run start:prod",
+              "Restart=always",
+              "RestartSec=10",
+              "User=ec2-user",
+              "Group=ec2-user",
+              "StandardOutput=append:/var/log/interview_api.log",
+              "StandardError=append:/var/log/interview_api.err",
+              "",
+              "[Install]",
+              "WantedBy=multi-user.target",
+              "EOF",
+              "  sudo systemctl daemon-reload",
+              "  sudo systemctl enable ${SERVICE_NAME}",
+              "  echo Service file created and enabled.",
+              "fi",
+              "",
+              "# Stop the existing service if it is running",
+              "if sudo systemctl is-active --quiet $SERVICE_NAME; then",
+              "  echo Stopping existing $SERVICE_NAME service...",
+              "  sudo systemctl stop $SERVICE_NAME || exit 1",
+              "  echo Service stopped successfully.",
+              "else",
+              "  echo No existing service found. Proceeding with deployment.",
+              "fi",
+              "",
+              "# Start the service using systemctl",
+              "echo Starting $SERVICE_NAME service...",
+              "sudo systemctl start $SERVICE_NAME || exit 1",
+              "",
+              "# Wait for the service to start",
+              "sleep 5",
+              "",
+              "# Check if the service is running",
+              "if sudo systemctl is-active --quiet $SERVICE_NAME; then",
+              "  echo Service started successfully!",
+              "  sudo systemctl status $SERVICE_NAME --no-pager -l",
+              "  echo Deployment completed successfully!",
+              "else",
+              "  echo ERROR: Service failed to start!",
+              "  sudo systemctl status $SERVICE_NAME --no-pager -l",
+              "  exit 1",
+              "fi"
+            ]' \
+            --output text \
+            --query "Command.CommandId")
+          
+          echo "Command ID: $COMMAND_ID"
+          echo "Waiting for deployment to complete..."
+          
+          # Wait for command to complete (with timeout of 20 minutes)
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --max-attempts 120 \
+            --delay 10 || {
+              echo "Command timed out or failed!"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID"
               exit 1
-            fi
-
-            echo "Environment variables set successfully."
-
-            # Install dependencies
-            npm install --force || { echo 'Failed to install npm dependencies. Exiting...'; exit 1; }
-
-            # Build the NestJS application
-            npm run build:prod || { echo 'Failed to build the NestJS application. Exiting...'; exit 1; }
-
-            echo "Proceeding with deployment..."
-
-            # Create systemd service file if it doesn't exist
-            if [ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
-              echo "Creating systemd service file..."
-              sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" > /dev/null <<EOF
-            [Unit]
-            Description=Interview Backend (Nest.js) Service
-            After=network.target
-
-            [Service]
-            WorkingDirectory=${PROJECT_DIR}
-            ExecStart=/usr/bin/npm run start:prod
-            Restart=always
-            RestartSec=10
-            User=ec2-user
-            Group=ec2-user
-            StandardOutput=append:/var/log/interview_api.log
-            StandardError=append:/var/log/interview_api.err
-
-            [Install]
-            WantedBy=multi-user.target
-            EOF
-
-              sudo systemctl daemon-reload
-              sudo systemctl enable ${SERVICE_NAME}
-              echo "Service file created and enabled."
-            fi
-
-            # Stop the existing service if it's running
-            if sudo systemctl is-active --quiet $SERVICE_NAME; then
-              echo "Stopping existing $SERVICE_NAME service..."
-              sudo systemctl stop $SERVICE_NAME || { echo "Failed to stop service. Exiting..."; exit 1; }
-              echo "Service stopped successfully."
-            else
-              echo "No existing service found. Proceeding with deployment."
-            fi
-
-            # Load environment variables
-            export $(grep -v '^#' .env | xargs)
-
-            # Start the service using systemctl
-            echo "Starting $SERVICE_NAME service..."
-            sudo systemctl start $SERVICE_NAME || { echo "Failed to start service. Exiting..."; exit 1; }
-
-            # Wait a moment for the service to start
-            sleep 5
-
-            # Check if the service is running
-            if sudo systemctl is-active --quiet $SERVICE_NAME; then
-              echo "Service started successfully!"
-              
-              # Show service status
-              sudo systemctl status $SERVICE_NAME --no-pager -l
-              
-              echo "Deployment completed successfully!"
-            else
-              echo "ERROR: Service failed to start!"
-              sudo systemctl status $SERVICE_NAME --no-pager -l
-              exit 1
-            fi
+            }
+          
+          # Get command output
+          echo "=== Deployment Output ==="
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "StandardOutputContent" \
+            --output text
+          
+          # Check for errors
+          ERROR_OUTPUT=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "StandardErrorContent" \
+            --output text)
+          
+          if [ ! -z "$ERROR_OUTPUT" ]; then
+            echo "=== Deployment Errors ==="
+            echo "$ERROR_OUTPUT"
+          fi
+          
+          # Check command status
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query "Status" \
+            --output text)
+          
+          if [ "$STATUS" != "Success" ]; then
+            echo "Deployment failed with status: $STATUS"
+            exit 1
+          fi
+          
+          echo "Deployment completed successfully!"
