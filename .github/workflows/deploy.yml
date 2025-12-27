@@ -6,7 +6,7 @@ on:
       - master
 
 permissions:
-  -tokiden: write  # Required for OIDC
+  id-token: write  # Required for OIDC
   contents: read   # To checkout the repository
 
 jobs:
