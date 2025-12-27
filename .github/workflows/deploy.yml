@@ -21,7 +21,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1  # Change to your region
+          aws-region: us-east-2  # Change to your region
       
       - name: Deploy to EC2 via SSM
         run: |
