@@ -253,6 +253,7 @@ export class CandidateService {
         // First delete all score-related data associated with these evaluations
         const evaluationIds = interview.evaluations.map(
           (ev) => ev.evaluationId,
+        );
 
         // Delete emotion scores
         // eslint-disable-next-line no-await-in-loop
