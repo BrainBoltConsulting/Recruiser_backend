@@ -16,18 +16,25 @@ export function setupSwagger(
     )
     .addServer('/prod')
     .build();
-    
-  let documentBuilder =  new DocumentBuilder()
+
+  const swaggerBasePath = process.env.SWAGGER_BASE_PATH?.trim();
+  let documentBuilder = new DocumentBuilder()
     .setTitle('API')
     .setVersion(options.version)
     .addBearerAuth()
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'cognito',
-    )
-    .build();
+    );
 
-  let targetBuilder = documentBuilder;
+  if (swaggerBasePath) {
+    documentBuilder = documentBuilder.addServer(
+      swaggerBasePath,
+      'API base path (e.g. staging)',
+    );
+  }
+
+  const targetBuilder = documentBuilder.build();
 
   // if (isServerless !== 'false') {
   //   targetBuilder = documentBuilderWithBasePath
