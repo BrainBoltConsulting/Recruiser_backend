@@ -85,6 +85,8 @@ export class MeetingController {
   }
 
   @Get('/schedule/:scheduleId/status')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth('cognito')
   @HttpCode(HttpStatus.OK)
   async getScheduleStatus(
     @Param('scheduleId') scheduleId: string,
