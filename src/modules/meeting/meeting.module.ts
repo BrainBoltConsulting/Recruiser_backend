@@ -11,6 +11,8 @@ import { JobShortlistedProfilesRepository } from '../../repositories/JobShortlis
 import { JobsRepository } from '../../repositories/JobsRepository';
 import { ManagerRelationshipRepository } from '../../repositories/ManagerRelationshipRepository';
 import { ManagerRepository } from '../../repositories/ManagerRepository';
+import { ReportMasterRepository } from '../../repositories/ReportMasterRepository';
+import { ReportScoreRepository } from '../../repositories/ReportScoreRepository';
 import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { SharedModule } from '../../shared/shared.module';
 import { AuthModule } from '../auth/auth.module';
@@ -33,6 +35,8 @@ import { MeetingService } from './meeting.service';
       JobShortlistedProfilesRepository,
       ManagerRelationshipRepository,
       ManagerRepository,
+      ReportMasterRepository,
+      ReportScoreRepository,
     ]),
     forwardRef(() => SharedModule),
     forwardRef(() => AuthModule),
