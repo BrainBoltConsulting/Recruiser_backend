@@ -36,8 +36,11 @@ export class JobSkills {
   @Column("bigint", { name: "skill_sequence" })
   skillSequence: string;
 
+  @Column("uuid", { name: "j_uuid" })
+  jUuid: string;
+
   @ManyToOne(() => Jobs, (jobs) => jobs.jobSkills)
-  @JoinColumn([{ name: "job_id", referencedColumnName: "jobId" }])
+  @JoinColumn([{ name: "j_uuid", referencedColumnName: "jUuid" }])
   job: Jobs;
 
   @ManyToOne(() => Skills, (skills) => skills.jobSkills)

@@ -8,5 +8,5 @@ export class ScheduleInterviewDto {
 
     @ApiProperty()
     @IsString()
-    jobId: string;
+    jUuid: string;
 }

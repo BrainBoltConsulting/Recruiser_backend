@@ -95,7 +95,7 @@ export class MeetingService {
 
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
     this.logger.log(
-      `Scheduling interview for candidateId=${scheduleInterviewDto.candidateId}, jobId=${scheduleInterviewDto.jobId}`,
+      `Scheduling interview for candidateId=${scheduleInterviewDto.candidateId}, jUuid=${scheduleInterviewDto.jUuid}`,
     );
 
     const candidateEntity = await this.candidateRepository.findById(
@@ -105,22 +105,22 @@ export class MeetingService {
       `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (ID: ${candidateEntity.candidateId})`,
     );
 
-    const jobEntity = await this.jobsRepository.findById(
-      scheduleInterviewDto.jobId,
+    const jobEntity = await this.jobsRepository.findByJUuid(
+      scheduleInterviewDto.jUuid,
     );
     this.logger.log(
       `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (ID: ${candidateEntity.candidateId})`,
     );
 
     const findScheduleEntityWithTheSameCandidateAndJob =
-      await this.scheduleRepository.findByCandidateAndJobId(
+      await this.scheduleRepository.findByCandidateAndJUuid(
         scheduleInterviewDto.candidateId,
-        scheduleInterviewDto.jobId,
+        scheduleInterviewDto.jUuid,
       );
 
     if (findScheduleEntityWithTheSameCandidateAndJob) {
       this.logger.warn(
-        `Attempt to schedule duplicate interview for candidateId=${scheduleInterviewDto.candidateId}, jobId=${scheduleInterviewDto.jobId}`,
+        `Attempt to schedule duplicate interview for candidateId=${scheduleInterviewDto.candidateId}, jUuid=${scheduleInterviewDto.jUuid}`,
       );
 
       throw new BadRequestException(
@@ -132,7 +132,8 @@ export class MeetingService {
       scheduledDatetime: new Date(),
       candidate: candidateEntity,
       candidateId: candidateEntity.candidateId,
-      jobId: scheduleInterviewDto.jobId,
+      jobId: jobEntity.jobId,
+      jUuid: jobEntity.jUuid,
       job: jobEntity,
     });
 
@@ -2394,7 +2395,7 @@ export class MeetingService {
             managerId,
             startDate: getManagerReportDto.startDate,
             endDate: getManagerReportDto.endDate,
-            jobId: getManagerReportDto.jobId,
+            jUuid: getManagerReportDto.jUuid,
             includeHierarchy: getManagerReportDto.includeHierarchy,
             managerJobFilters: getManagerReportDto.managerJobFilters,
           },
@@ -2444,7 +2445,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
         );
       this.enhancedLogger.endTimer(`db-fetch-schedules-${managerId}`);
 
@@ -2457,7 +2458,7 @@ export class MeetingService {
             schedulesCount: schedules.length,
             startDate,
             endDate,
-            jobId: getManagerReportDto.jobId,
+            jUuid: getManagerReportDto.jUuid,
           },
         },
         'MeetingService',
@@ -2470,7 +2471,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
         );
       this.enhancedLogger.endTimer(`db-fetch-resumes-${managerId}`);
 
@@ -2483,7 +2484,7 @@ export class MeetingService {
             resumesCount: resumes.length,
             startDate,
             endDate,
-            jobId: getManagerReportDto.jobId,
+            jUuid: getManagerReportDto.jUuid,
           },
         },
         'MeetingService',
@@ -2556,7 +2557,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
           timeConfig,
           getManagerReportDto.managerJobFilters,
         );
@@ -2582,7 +2583,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
           timeConfig,
           getManagerReportDto.managerJobFilters,
         );
@@ -2720,7 +2721,7 @@ export class MeetingService {
       interviewHrs: number;
       followupHrs: number;
     },
-    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    _managerJobFilters?: Array<{ managerId: string; jUuid?: string }>,
     isTopLevel = true, // New parameter to distinguish top-level vs recursive calls
   ): Promise<HierarchicalReportDto[]> {
     const hierarchicalReports: HierarchicalReportDto[] = [];
@@ -2898,7 +2899,7 @@ export class MeetingService {
       interviewHrs: number;
       followupHrs: number;
     },
-    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    _managerJobFilters?: Array<{ managerId: string; jUuid?: string }>,
   ): Promise<{
     allSchedules: Schedule[];
     allResumes: Array<{ createdOn: string | number | Date }>; // JobShortlistedProfiles[]

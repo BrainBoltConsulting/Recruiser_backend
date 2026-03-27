@@ -1,12 +1,11 @@
-
-import { Repository } from 'typeorm';
-import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+
+import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { JobShortlistedProfiles } from '../entities/JobShortlistedProfiles';
 
 @CustomRepository(JobShortlistedProfiles)
 export class JobShortlistedProfilesRepository extends Repository<JobShortlistedProfiles> {
-
   async findByName(name: string): Promise<JobShortlistedProfiles | null> {
     return this.createQueryBuilder('jobshortlistedprofiles')
       .where('jobshortlistedprofiles.name = :name', { name })
@@ -25,7 +24,9 @@ export class JobShortlistedProfilesRepository extends Repository<JobShortlistedP
       .getOne();
 
     if (!entity) {
-      throw new NotFoundException(`${JobShortlistedProfiles} not found with id: ${id}`);
+      throw new NotFoundException(
+        `${JobShortlistedProfiles} not found with id: ${id}`,
+      );
     }
 
     return entity;
@@ -38,7 +39,7 @@ export class JobShortlistedProfilesRepository extends Repository<JobShortlistedP
     managerId: string,
     startDate: Date,
     endDate: Date,
-    jobId?: string,
+    jUuid?: string,
   ): Promise<JobShortlistedProfiles[]> {
     const query = this.createQueryBuilder('shortlist')
       .leftJoinAndSelect('shortlist.job', 'job')
@@ -50,8 +51,8 @@ export class JobShortlistedProfilesRepository extends Repository<JobShortlistedP
         endDate,
       });
 
-    if (jobId) {
-      query.andWhere('job.job_id = :jobId', { jobId });
+    if (jUuid) {
+      query.andWhere('job.jUuid = :jUuid', { jUuid });
     }
 
     return query.getMany();

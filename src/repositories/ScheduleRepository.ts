@@ -42,13 +42,13 @@ export class ScheduleRepository extends Repository<Schedule> {
       .getMany();
   }
 
-  async findByCandidateAndJobId(
+  async findByCandidateAndJUuid(
     candidateId: string,
-    jobId: string,
+    jUuid: string,
   ): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
       .where('schedule.candidateId = :candidateId', { candidateId })
-      .andWhere('schedule.jobId = :jobId', { jobId })
+      .andWhere('schedule.jUuid = :jUuid', { jUuid })
       .getOne();
   }
 
@@ -65,7 +65,7 @@ export class ScheduleRepository extends Repository<Schedule> {
     managerId: string,
     startDate: Date,
     endDate: Date,
-    jobId?: string,
+    jUuid?: string,
   ): Promise<Schedule[]> {
     const query = this.createQueryBuilder('schedule')
       .leftJoinAndSelect('schedule.job', 'job')
@@ -76,8 +76,8 @@ export class ScheduleRepository extends Repository<Schedule> {
         endDate,
       });
 
-    if (jobId) {
-      query.andWhere('job.jobId = :jobId', { jobId });
+    if (jUuid) {
+      query.andWhere('job.jUuid = :jUuid', { jUuid });
     }
 
     return query.getMany();
