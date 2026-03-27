@@ -57,6 +57,9 @@ export class ScheduleStatusJobDto {
   jobId: string;
 
   @ApiProperty()
+  jUuid: string;
+
+  @ApiProperty()
   jobTitle: string;
 
   @ApiProperty({ nullable: true })
@@ -186,6 +189,9 @@ export class ScheduleStatusResponseDto {
 
   @ApiProperty()
   jobId: string;
+
+  @ApiProperty()
+  jUuid: string;
 
   @ApiProperty({ type: ScheduleStatusCandidateDto })
   candidate: ScheduleStatusCandidateDto;

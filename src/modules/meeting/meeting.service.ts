@@ -140,7 +140,7 @@ export class MeetingService {
     const scheduleEntity = await this.scheduleRepository.save(newSchedule);
     this.logger.log(
       `Interview scheduled successfully | scheduleId=${scheduleEntity.scheduleId}, ` +
-        `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}`,
+        `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}, jUuid=${scheduleEntity.jUuid}`,
     );
 
     await this.sendInvitionToCandidate(scheduleEntity.scheduleId);
@@ -181,6 +181,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
           scheduledDateTime: scheduleEntity.scheduledDatetime,
           attendedDateTime: scheduleEntity.attendedDatetime,
         },
@@ -485,7 +486,7 @@ export class MeetingService {
       {
         scheduleId: scheduleEntity.scheduleId,
         candidateId: scheduleEntity.candidateId.toString(),
-        metadata: { jobId: scheduleEntity.jobId },
+        metadata: { jobId: scheduleEntity.jobId, jUuid: scheduleEntity.jUuid },
       },
     );
 
@@ -718,6 +719,7 @@ export class MeetingService {
               interviewId: interviewEntityByCandidateId.interviewId.toString(),
               scheduleId: scheduleEntity.scheduleId,
               jobId: scheduleEntity.jobId,
+              jUuid: scheduleEntity.jUuid,
               candidate: {
                 id: candidate.candidateId.toString(),
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
@@ -1048,6 +1050,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
         },
       },
     );
@@ -1419,6 +1422,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
         },
       },
     );
@@ -1791,6 +1795,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
           questionId,
         },
       },
@@ -2305,6 +2310,7 @@ export class MeetingService {
       updatedAt: schedule.updatedAt,
       candidateId: schedule.candidateId,
       jobId: schedule.jobId,
+      jUuid: schedule.jUuid,
       candidate: {
         candidateId: candidate.candidateId,
         email: candidate.email,
@@ -2314,6 +2320,7 @@ export class MeetingService {
       },
       job: {
         jobId: job.jobId,
+        jUuid: job.jUuid,
         jobTitle: job.jobTitle,
         yearsOfExp: job.yearsOfExp ?? null,
         jobDesc: job.jobDesc ?? null,
@@ -2910,7 +2917,7 @@ export class MeetingService {
   }> {
     const allSchedules: Schedule[] = [];
     const allResumes: Array<{ createdOn: string | number | Date }> = []; // JobShortlistedProfiles[]
-    const allJobs: Array<{ jobId: string; jobTitle: string }> = [];
+    const allJobs: Array<{ jUuid: string; jobTitle: string }> = [];
 
     // Ensure we have fallback values for timeConfig
     const safeTimeConfig = timeConfig || {
@@ -2949,7 +2956,7 @@ export class MeetingService {
       );
       allJobs.push(
         ...managerJobs.map((job) => ({
-          jobId: job.jobId,
+          jUuid: job.jUuid,
           jobTitle: job.jobTitle || '',
         })),
       );
@@ -2972,7 +2979,7 @@ export class MeetingService {
     // Remove duplicate jobs based on jobId
     const uniqueJobs = allJobs.filter(
       (job, index, self) =>
-        index === self.findIndex((j) => j.jobId === job.jobId),
+        index === self.findIndex((j) => j.jUuid === job.jUuid),
     );
 
     const totalInvitesShared = allSchedules.length;
