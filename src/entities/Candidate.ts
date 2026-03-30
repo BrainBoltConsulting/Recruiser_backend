@@ -13,6 +13,7 @@ import { CandidateVerification } from './CandidateVerification';
 import { Interview } from './Interview';
 import { JobShortlistedProfiles } from './JobShortlistedProfiles';
 import { Login } from './Login';
+import { ReportMaster } from './ReportMaster';
 import { ResumeScores } from './ResumeScores';
 import { Schedule } from './Schedule';
 
@@ -98,6 +99,9 @@ export class Candidate {
     (jobShortlistedProfiles) => jobShortlistedProfiles.candidate,
   )
   jobShortlistedProfiles: JobShortlistedProfiles[];
+
+  @OneToMany(() => ReportMaster, (reportMaster) => reportMaster.candidate)
+  reportMasters: ReportMaster[];
 
   @OneToMany(() => ResumeScores, (resumeScores) => resumeScores.candidate)
   resumeScores: ResumeScores[];

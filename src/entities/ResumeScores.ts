@@ -51,7 +51,10 @@ export class ResumeScores {
   @JoinColumn([{ name: "criteria_id", referencedColumnName: "criteriaId" }])
   criteria: ResumeCriteriaMaster;
 
+  @Column("uuid", { name: "j_uuid" })
+  jUuid: string;
+
   @ManyToOne(() => Jobs, (jobs) => jobs.resumeScores)
-  @JoinColumn([{ name: "job_id", referencedColumnName: "jobId" }])
+  @JoinColumn([{ name: "j_uuid", referencedColumnName: "jUuid" }])
   job: Jobs;
 }

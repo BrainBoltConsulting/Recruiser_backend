@@ -19,6 +19,9 @@ export class Jobs {
   @PrimaryGeneratedColumn({ type: "bigint", name: "job_id" })
   jobId: string;
 
+  @Column("uuid", { name: "j_uuid" })
+  jUuid: string;
+
   @Column("text", { name: "job_title" })
   jobTitle: string;
 

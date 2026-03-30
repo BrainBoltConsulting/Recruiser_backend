@@ -4,9 +4,11 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
-} from "typeorm";
-import { Candidate } from "./Candidate";
+} from 'typeorm';
+import { Candidate } from './Candidate';
+import { ReportScore } from './ReportScore';
 
 @Index("report_master_pkey", ["reportId"], { unique: true })
 @Entity("report_master", { schema: "public" })
@@ -33,7 +35,16 @@ export class ReportMaster {
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
-  // @ManyToOne(() => Candidate, (candidate) => candidate.reportMasters)
-  // @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
-  // candidate: Candidate;
+  @Column({ type: 'integer', name: 'candidate_id' })
+  candidateId: number;
+
+  @Column('integer', { name: 'review', nullable: true, default: 0 })
+  review: number | null;
+
+  @ManyToOne(() => Candidate, (candidate) => candidate.reportMasters)
+  @JoinColumn([{ name: 'candidate_id', referencedColumnName: 'candidateId' }])
+  candidate: Candidate;
+
+  @OneToMany(() => ReportScore, (reportScore) => reportScore.reportMaster)
+  reportScores: ReportScore[];
 }

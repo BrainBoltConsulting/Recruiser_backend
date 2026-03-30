@@ -4,6 +4,7 @@ import {
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
+import axios from 'axios';
 import { Transactional } from 'typeorm-transactional';
 
 import { Role } from '../../constants/role.enum';
@@ -11,11 +12,17 @@ import { TokenTypeEnum } from '../../constants/token-type.enum';
 import type { Candidate } from '../../entities/Candidate';
 import { UtilsProvider } from '../../providers/utils.provider';
 import { CandidateRepository } from '../../repositories/CandidateRepository';
+import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
 import { DishonestRepository } from '../../repositories/DishonestRepository';
+import { DishonestSsRepository } from '../../repositories/DishonestSsRepository';
+import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepository';
 import { EvaluationRepository } from '../../repositories/EvaluationRepository';
 import { InterviewRepository } from '../../repositories/InterviewRepository';
 import { LoginRepository } from '../../repositories/LoginRepository';
 import { ScheduleRepository } from '../../repositories/ScheduleRepository';
+import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
+import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
+import { ApiConfigService } from '../../shared/services/api-config.service';
 import { S3Service } from '../../shared/services/aws-s3.service';
 import { MailService } from '../../shared/services/mail.service';
 import { UrlService } from '../../shared/services/url.service';
@@ -30,11 +37,6 @@ import type { GetUsersDto } from './dtoes/get-users.dto';
 import { UpdatePasswordDto } from './dtoes/update-password.dto';
 import { UpdateUserDto } from './dtoes/update-user.dto';
 import { UserNotFoundException } from './exceptions/user-not-found.exception';
-import { EmotionScoreRepository } from '../../repositories/EmotionScoreRepository';
-import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
-import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
-import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
-import { DishonestSsRepository } from '../../repositories/DishonestSsRepository';
 
 @Injectable()
 export class CandidateService {
@@ -57,6 +59,7 @@ export class CandidateService {
     private readonly jwtService: JwtStrategy,
     public readonly userTokenService: UserTokenService,
     public readonly urlService: UrlService,
+    private readonly apiConfigService: ApiConfigService,
   ) {}
 
   @Transactional()
@@ -248,8 +251,10 @@ export class CandidateService {
     for (const interview of interviews) {
       if (interview.evaluations?.length) {
         // First delete all score-related data associated with these evaluations
-        const evaluationIds = interview.evaluations.map((ev) => ev.evaluationId);
-        
+        const evaluationIds = interview.evaluations.map(
+          (ev) => ev.evaluationId,
+        );
+
         // Delete emotion scores
         // eslint-disable-next-line no-await-in-loop
         await this.emotionScoreRepository
@@ -299,7 +304,9 @@ export class CandidateService {
       await this.vocabScoreRepository
         .createQueryBuilder()
         .delete()
-        .where('interview_id = :interviewId', { interviewId: interview.interviewId })
+        .where('interview_id = :interviewId', {
+          interviewId: interview.interviewId,
+        })
         .execute();
 
       // Finally delete the interview
@@ -315,7 +322,8 @@ export class CandidateService {
     candidateId: number,
   ): Promise<void> {
     try {
-      const candidateManagerData = await this.candidateRepository.findManagerByCandidateId(candidateId);
+      const candidateManagerData =
+        await this.candidateRepository.findManagerByCandidateId(candidateId);
 
       if (!candidateManagerData) {
         throw new UserNotFoundException();
@@ -342,20 +350,23 @@ export class CandidateService {
         to: manager.managerEmail,
         subject,
         html: this.mailService.sendInterviewCompletionNotification(
-          firstName as string,
-          middleName as string | null,
-          lastName as string,
+          firstName,
+          middleName,
+          lastName,
           candidateManagerData.candidateId.toString(),
           {
-            managerEmail: manager.managerEmail as string,
-            firstName: manager.firstName as string | null,
-            middleName: manager.middleName as string | null,
-            lastName: manager.lastName as string | null,
-            company: manager.company as string | null,
-            logoS3key: manager.logoS3key as string | null,
+            managerEmail: manager.managerEmail,
+            firstName: manager.firstName,
+            middleName: manager.middleName,
+            lastName: manager.lastName,
+            company: manager.company,
+            logoS3key: manager.logoS3key,
           },
         ),
       });
+
+      // Notify assessment/Greenhouse that the test is completed (internal resources)
+      await this.notifyAssessmentMarkCompleted(candidateId);
     } catch (error) {
       if (
         error instanceof UserNotFoundException ||
@@ -363,10 +374,73 @@ export class CandidateService {
       ) {
         throw error;
       }
+
       console.error('Error sending interview completion notification:', error);
 
       throw new InternalServerErrorException(
         'Failed to send interview completion notification',
+      );
+    }
+  }
+
+  /**
+   * Notifies the assessment/Greenhouse API that the test is completed (PATCH mark_completed).
+   * Uses scheduleId from the schedule table for this candidate (most recent schedule).
+   * Does not throw: failures are logged but do not affect the main notification flow.
+   */
+  private async notifyAssessmentMarkCompleted(
+    candidateId: number,
+  ): Promise<void> {
+    const { baseUrl, username, password } =
+      this.apiConfigService.assessmentConfig;
+
+    if (!baseUrl?.trim()) {
+      return;
+    }
+
+    const schedules = await this.scheduleRepository.findByCandidateId(
+      candidateId,
+    );
+
+    if (!schedules?.length) {
+      console.warn(
+        `[notifyAssessmentMarkCompleted] No schedule found for candidateId=${candidateId}, skipping assessment API call`,
+      );
+
+      return;
+    }
+
+    const mostRecent = [...schedules].sort(
+      (a, b) =>
+        new Date(b.createdOn).getTime() - new Date(a.createdOn).getTime(),
+    )[0];
+    const scheduleId = mostRecent.scheduleId;
+
+    const url = `${baseUrl.replace(
+      /\/$/,
+      '',
+    )}/assessment/mark_completed/${scheduleId}`;
+
+    const auth = username
+      ? Buffer.from(`${username}:${password ?? ''}`, 'utf-8').toString('base64')
+      : '';
+
+    try {
+      const response = await axios.patch(url, undefined, {
+        timeout: 15_000,
+        headers: auth ? { Authorization: `Basic ${auth}` } : {},
+        validateStatus: () => true,
+      });
+
+      if (response.status !== 204) {
+        console.warn(
+          `[notifyAssessmentMarkCompleted] Assessment API returned ${response.status} for candidateId=${candidateId}, scheduleId=${scheduleId}`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[notifyAssessmentMarkCompleted] Assessment API call failed for candidateId=${candidateId}, scheduleId=${scheduleId}:`,
+        error instanceof Error ? error.message : error,
       );
     }
   }

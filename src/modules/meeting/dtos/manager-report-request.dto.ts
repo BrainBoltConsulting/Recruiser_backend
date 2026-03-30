@@ -17,11 +17,11 @@ export class ManagerJobFilterDto {
 
   @ApiPropertyOptional({
     description:
-      'Job ID to filter for this specific manager. If not provided, shows all jobs for this manager',
+      'Job UUID to filter for this specific manager. If not provided, shows all jobs for this manager',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @IsOptional()
-  jobId?: string;
+  jUuid?: string;
 }
 
 export class GetManagerReportDto {
@@ -43,10 +43,10 @@ export class GetManagerReportDto {
 
   @ApiPropertyOptional({
     description:
-      'Optional job ID to filter the report by specific job for main manager',
+      'Optional job UUID to filter the report by specific job for main manager',
   })
   @IsOptional()
-  jobId?: string;
+  jUuid?: string;
 
   @ApiPropertyOptional({
     description:
@@ -64,9 +64,9 @@ export class GetManagerReportDto {
       'Independent job filters for each manager in hierarchy. Each manager can have their own job selection.',
     type: [ManagerJobFilterDto],
     example: [
-      { managerId: '5', jobId: 'job-uuid-4' }, // Manager 5: show only job 4
+      { managerId: '5', jUuid: 'job-uuid-4' }, // Manager 5: show only job 4
       { managerId: '7' }, // Manager 7: show all jobs (no filter)
-      { managerId: '10', jobId: 'job-uuid-2' }, // Manager 10: show only job 2
+      { managerId: '10', jUuid: 'job-uuid-2' }, // Manager 10: show only job 2
     ],
   })
   @IsOptional()

@@ -1,12 +1,11 @@
-
-import { Repository } from 'typeorm';
-import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+
+import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { Jobs } from '../entities/Jobs';
 
 @CustomRepository(Jobs)
 export class JobsRepository extends Repository<Jobs> {
-
   async findByJobTitle(jobTitle: string): Promise<Jobs | null> {
     return this.createQueryBuilder('jobs')
       .where('jobs.jobTitle = :jobTitle', { jobTitle })
@@ -26,6 +25,18 @@ export class JobsRepository extends Repository<Jobs> {
 
     if (!entity) {
       throw new NotFoundException(`${Jobs} not found with id: ${id}`);
+    }
+
+    return entity;
+  }
+
+  async findByJUuid(jUuid: string): Promise<Jobs> {
+    const entity = await this.createQueryBuilder('jobs')
+      .where('jobs.jUuid = :jUuid', { jUuid })
+      .getOne();
+
+    if (!entity) {
+      throw new NotFoundException(`${Jobs} not found with j_uuid: ${jUuid}`);
     }
 
     return entity;

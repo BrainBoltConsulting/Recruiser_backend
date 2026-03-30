@@ -161,4 +161,13 @@ export class ApiConfigService {
       systemEmail: this.getString('COGNITO_SYSTEM_EMAIL'),
     };
   }
+
+  /** Assessment/Greenhouse API: base URL and Basic Auth (username only, no password) for mark_completed */
+  get assessmentConfig() {
+    return {
+      baseUrl: this.getString('ASSESSMENT_API_BASE_URL', ''),
+      username: this.getString('ASSESSMENT_API_KEY_USERNAME', ''),
+      password: this.getString('ASSESSMENT_API_KEY_PASSWORD', ''),
+    };
+  }
 }

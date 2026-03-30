@@ -22,6 +22,7 @@ import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earl
 import { GetManagerReportDto } from './dtos/manager-report-request.dto';
 import type { ManagerReportResponseDto } from './dtos/manager-report-response.dto';
 import { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
+import type { ScheduleStatusResponseDto } from './dtos/schedule-status-response.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
 import { MeetingService } from './meeting.service';
 
@@ -81,6 +82,16 @@ export class MeetingController {
   @HttpCode(HttpStatus.OK)
   async getInterviewById(@Param('scheduleId') scheduleId: string) {
     return this.meetingService.getInterviewByScheduleId(scheduleId);
+  }
+
+  @Get('/schedule/:scheduleId/status')
+  @UseGuards(CognitoAuthGuard)
+  @ApiBearerAuth('cognito')
+  @HttpCode(HttpStatus.OK)
+  async getScheduleStatus(
+    @Param('scheduleId') scheduleId: string,
+  ): Promise<ScheduleStatusResponseDto> {
+    return this.meetingService.getScheduleStatusByScheduleId(scheduleId);
   }
 
   @Post('/schedule/:scheduleId/invite')

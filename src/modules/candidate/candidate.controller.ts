@@ -78,9 +78,11 @@ export class CandidateController {
   @Post(':id/send-interview-completion-notification')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Send interview completion notification to manager',
+    summary: 'Send interview completion notification',
     description:
-      'Sends an email notification to the manager when a candidate completes their interview',
+      'Sends an email to the manager when a candidate completes their interview, and notifies ' +
+      'internal resources (assessment/Greenhouse) via PATCH /assessment/mark_completed/:scheduleId. ' +
+      'scheduleId is resolved from the schedule table by candidate id (most recent schedule).',
   })
   @ApiParam({
     name: 'id',

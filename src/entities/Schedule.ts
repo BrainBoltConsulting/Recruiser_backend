@@ -27,6 +27,9 @@ export class Schedule {
   @Column({ nullable: true, name: 'job_id' })
   jobId: string;
 
+  @Column("uuid", { name: "j_uuid" })
+  jUuid: string;
+
   @Column("timestamp without time zone", {
     name: "attended_datetime",
     nullable: true,
@@ -50,6 +53,6 @@ export class Schedule {
   candidate: Candidate;
 
   @ManyToOne(() => Jobs, (jobs) => jobs.schedules)
-  @JoinColumn([{ name: "job_id", referencedColumnName: "jobId" }])
+  @JoinColumn([{ name: "j_uuid", referencedColumnName: "jUuid" }])
   job: Jobs;
 }

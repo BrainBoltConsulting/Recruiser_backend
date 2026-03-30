@@ -38,8 +38,11 @@ export class JobShortlistedProfiles {
   @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
   candidate: Candidate;
 
+  @Column("uuid", { name: "j_uuid" })
+  jUuid: string;
+
   @ManyToOne(() => Jobs, (jobs) => jobs.jobShortlistedProfiles)
-  @JoinColumn([{ name: "job_id", referencedColumnName: "jobId" }])
+  @JoinColumn([{ name: "j_uuid", referencedColumnName: "jUuid" }])
   job: Jobs;
 
   @ManyToOne(() => Manager, (manager) => manager.jobShortlistedProfiles)

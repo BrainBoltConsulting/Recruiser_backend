@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-await-in-loop */
 /* eslint-disable sonarjs/cognitive-complexity */
 import {
@@ -9,9 +10,12 @@ import {
 import axios from 'axios';
 import { Transactional } from 'typeorm-transactional';
 
+import {
+  CompletionReasonEnum,
+  CompletionTypeEnum,
+} from '../../constants/completion-reason.enum';
 import { LogCategory } from '../../constants/logger-type.enum';
 import { MessageTypeEnum } from '../../constants/message.enum';
-import { CompletionReasonEnum, CompletionTypeEnum } from '../../constants/completion-reason.enum';
 import {
   DAY_NAMES,
   REPORT_BREAKDOWNS,
@@ -30,6 +34,8 @@ import { JobShortlistedProfilesRepository } from '../../repositories/JobShortlis
 import { JobsRepository } from '../../repositories/JobsRepository';
 import { ManagerRelationshipRepository } from '../../repositories/ManagerRelationshipRepository';
 import { ManagerRepository } from '../../repositories/ManagerRepository';
+import { ReportMasterRepository } from '../../repositories/ReportMasterRepository';
+import { ReportScoreRepository } from '../../repositories/ReportScoreRepository';
 import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { ApiConfigService } from '../../shared/services/api-config.service';
 import { PollyService } from '../../shared/services/aws-polly.service';
@@ -46,6 +52,11 @@ import type { HierarchicalReportDto } from './dtos/manager-report-response.dto';
 import { ManagerReportResponseDto } from './dtos/manager-report-response.dto';
 import type { ReportPartDto } from './dtos/report-part.dto';
 import type { ScheduleInterviewDto } from './dtos/schedule-interview.dto';
+import {
+  type ScheduleStatusResponseDto,
+  ReportStatusEnum,
+  ScheduleStatusEnum,
+} from './dtos/schedule-status-response.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
 
 @Injectable()
@@ -70,6 +81,8 @@ export class MeetingService {
     private readonly enhancedLogger: EnhancedLoggerService,
     private readonly managerRelationshipRepository: ManagerRelationshipRepository,
     private readonly managerRepository: ManagerRepository,
+    private readonly reportMasterRepository: ReportMasterRepository,
+    private readonly reportScoreRepository: ReportScoreRepository,
     private readonly jobShortlistedProfilesRepository: JobShortlistedProfilesRepository,
   ) {}
 
@@ -82,7 +95,7 @@ export class MeetingService {
 
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
     this.logger.log(
-      `Scheduling interview for candidateId=${scheduleInterviewDto.candidateId}, jobId=${scheduleInterviewDto.jobId}`,
+      `Scheduling interview for candidateId=${scheduleInterviewDto.candidateId}, jUuid=${scheduleInterviewDto.jUuid}`,
     );
 
     const candidateEntity = await this.candidateRepository.findById(
@@ -92,22 +105,22 @@ export class MeetingService {
       `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (ID: ${candidateEntity.candidateId})`,
     );
 
-    const jobEntity = await this.jobsRepository.findById(
-      scheduleInterviewDto.jobId,
+    const jobEntity = await this.jobsRepository.findByJUuid(
+      scheduleInterviewDto.jUuid,
     );
     this.logger.log(
       `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (ID: ${candidateEntity.candidateId})`,
     );
 
     const findScheduleEntityWithTheSameCandidateAndJob =
-      await this.scheduleRepository.findByCandidateAndJobId(
+      await this.scheduleRepository.findByCandidateAndJUuid(
         scheduleInterviewDto.candidateId,
-        scheduleInterviewDto.jobId,
+        scheduleInterviewDto.jUuid,
       );
 
     if (findScheduleEntityWithTheSameCandidateAndJob) {
       this.logger.warn(
-        `Attempt to schedule duplicate interview for candidateId=${scheduleInterviewDto.candidateId}, jobId=${scheduleInterviewDto.jobId}`,
+        `Attempt to schedule duplicate interview for candidateId=${scheduleInterviewDto.candidateId}, jUuid=${scheduleInterviewDto.jUuid}`,
       );
 
       throw new BadRequestException(
@@ -119,14 +132,15 @@ export class MeetingService {
       scheduledDatetime: new Date(),
       candidate: candidateEntity,
       candidateId: candidateEntity.candidateId,
-      jobId: scheduleInterviewDto.jobId,
+      jobId: jobEntity.jobId,
+      jUuid: jobEntity.jUuid,
       job: jobEntity,
     });
 
     const scheduleEntity = await this.scheduleRepository.save(newSchedule);
     this.logger.log(
       `Interview scheduled successfully | scheduleId=${scheduleEntity.scheduleId}, ` +
-        `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}`,
+        `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}, jUuid=${scheduleEntity.jUuid}`,
     );
 
     await this.sendInvitionToCandidate(scheduleEntity.scheduleId);
@@ -167,6 +181,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
           scheduledDateTime: scheduleEntity.scheduledDatetime,
           attendedDateTime: scheduleEntity.attendedDatetime,
         },
@@ -413,14 +428,19 @@ export class MeetingService {
 
     const context = { scheduleId };
 
-    const completionReason = isInterviewFinishedEarlierDto.completionReason || CompletionReasonEnum.NORMAL;
-    
+    const completionReason =
+      isInterviewFinishedEarlierDto.completionReason ||
+      CompletionReasonEnum.NORMAL;
+
     this.enhancedLogger.interviewEvent('🏁 Starting interview finish process', {
       ...context,
       metadata: {
-        isFinishedEarlier: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
-        completionReason: completionReason,
-        completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL
+        isFinishedEarlier:
+          isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
+        completionReason,
+        completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
+          ? CompletionTypeEnum.EARLY
+          : CompletionTypeEnum.NORMAL,
       },
     });
 
@@ -434,11 +454,12 @@ export class MeetingService {
           metadata: {
             completionReason: CompletionReasonEnum.TAB_CLOSE,
             warningType: 'tab_close_completion',
-            requiresAttention: true
-          }
+            requiresAttention: true,
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
+      // eslint-disable-next-line sonarjs/elseif-without-else
     } else if (isInterviewFinishedEarlierDto.isInterviewFinishedEarlier) {
       this.enhancedLogger.warn(
         LogCategory.INTERVIEW,
@@ -446,12 +467,12 @@ export class MeetingService {
         {
           ...context,
           metadata: {
-            completionReason: completionReason,
+            completionReason,
             warningType: 'early_completion',
-            requiresAttention: true
-          }
+            requiresAttention: true,
+          },
         },
-        'MeetingService'
+        'MeetingService',
       );
     }
 
@@ -465,7 +486,7 @@ export class MeetingService {
       {
         scheduleId: scheduleEntity.scheduleId,
         candidateId: scheduleEntity.candidateId.toString(),
-        metadata: { jobId: scheduleEntity.jobId },
+        metadata: { jobId: scheduleEntity.jobId, jUuid: scheduleEntity.jUuid },
       },
     );
 
@@ -588,8 +609,11 @@ export class MeetingService {
         metadata: {
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
           finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-          completionReason: completionReason,
-          completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
+          completionReason,
+          completionType:
+            isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
+              ? CompletionTypeEnum.EARLY
+              : CompletionTypeEnum.NORMAL,
         },
       },
     );
@@ -603,9 +627,12 @@ export class MeetingService {
         scheduleId,
         duration: criticalOperationsDuration,
         metadata: {
-          completionReason: completionReason,
-          completionType: isInterviewFinishedEarlierDto.isInterviewFinishedEarlier ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
-        }
+          completionReason,
+          completionType:
+            isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
+              ? CompletionTypeEnum.EARLY
+              : CompletionTypeEnum.NORMAL,
+        },
       },
       'MeetingService',
     );
@@ -618,8 +645,8 @@ export class MeetingService {
       interviewEntityByCandidateId,
       interviewEntityUpdate,
       completionReason,
-      isInterviewFinishedEarlierDto.isInterviewFinishedEarlier
-    ).catch(error => {
+      isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
+    ).catch((error) => {
       this.logger.error(
         `Background processing failed for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
         error.stack,
@@ -642,7 +669,7 @@ export class MeetingService {
     interviewEntityByCandidateId: any,
     interviewEntityUpdate: Partial<Interview>,
     completionReason: string,
-    isFinishedEarly: boolean
+    isFinishedEarly: boolean,
   ): Promise<void> {
     this.enhancedLogger.startTimer(`background-processing-${scheduleId}`);
     this.enhancedLogger.info(
@@ -653,112 +680,122 @@ export class MeetingService {
         candidateId: candidate.candidateId.toString(),
         scheduleId,
         metadata: {
-          operations: ['slack_notification', 'process_api_call']
-        }
+          operations: ['slack_notification', 'process_api_call'],
+        },
       },
       'MeetingService',
     );
 
     try {
       // Slack notification - wrapped in try-catch to ensure it doesn't break other background operations
+      // eslint-disable-next-line @typescript-eslint/naming-convention
       let slackNotificationSuccess = false;
+
       try {
-      this.enhancedLogger.notificationEvent(
-        '📢 Preparing Slack notification payload',
-        {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
-          scheduleId,
-          metadata: {
-            candidateName: `${candidate.firstName} ${candidate.lastName}`,
-            browser: interviewEntityByCandidateId.browserName,
-            finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-            evaluationsCount: interviewEntityByCandidateId.evaluations?.length || 0,
-            dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0,
-            vocabScoresCount: interviewEntityByCandidateId.vocabScores?.length || 0,
-          },
-        },
-      );
-
-      this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
-      slackNotificationSuccess = await this.slackNotificationService.sendBlocks({
-        blocks: this.slackNotificationService.formatInterviewSlackPayload({
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          scheduleId: scheduleEntity.scheduleId,
-          jobId: scheduleEntity.jobId,
-          candidate: {
-            id: candidate.candidateId.toString(),
-            fullName: candidate.firstName + ' ' + candidate.lastName,
-          },
-          browser: interviewEntityByCandidateId.browserName,
-          attendedTime: scheduleEntity.attendedDatetime,
-          finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-          completionReason: completionReason,
-          evaluations: interviewEntityByCandidateId.evaluations,
-          dishonests: interviewEntityByCandidateId.dishonests,
-        }),
-      });
-
-      const slackNotificationDuration = this.enhancedLogger.endTimer(
-        `slack-notification-${scheduleId}`,
-        LogCategory.NOTIFICATION,
-        slackNotificationSuccess 
-          ? 'Slack notification sent successfully' 
-          : 'Slack notification failed after retries',
-        {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
-          scheduleId,
-          metadata: {
-            success: slackNotificationSuccess,
-          },
-        },
-      );
-
-      if (!slackNotificationSuccess) {
-        this.enhancedLogger.warn(
-          LogCategory.NOTIFICATION,
-          '⚠️ Slack notification failed after all retry attempts',
+        this.enhancedLogger.notificationEvent(
+          '📢 Preparing Slack notification payload',
           {
             interviewId: interviewEntityByCandidateId.interviewId.toString(),
             candidateId: candidate.candidateId.toString(),
             scheduleId,
             metadata: {
               candidateName: `${candidate.firstName} ${candidate.lastName}`,
-              completionReason: completionReason,
+              browser: interviewEntityByCandidateId.browserName,
+              finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+              evaluationsCount:
+                interviewEntityByCandidateId.evaluations?.length || 0,
+              dishonestsCount:
+                interviewEntityByCandidateId.dishonests?.length || 0,
+              vocabScoresCount:
+                interviewEntityByCandidateId.vocabScores?.length || 0,
+            },
+          },
+        );
+
+        this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
+        slackNotificationSuccess =
+          await this.slackNotificationService.sendBlocks({
+            blocks: this.slackNotificationService.formatInterviewSlackPayload({
+              interviewId: interviewEntityByCandidateId.interviewId.toString(),
+              scheduleId: scheduleEntity.scheduleId,
+              jobId: scheduleEntity.jobId,
+              jUuid: scheduleEntity.jUuid,
+              candidate: {
+                id: candidate.candidateId.toString(),
+                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+                fullName: candidate.firstName + ' ' + candidate.lastName,
+              },
+              browser: interviewEntityByCandidateId.browserName,
+              attendedTime: scheduleEntity.attendedDatetime,
+              finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+              completionReason,
+              evaluations: interviewEntityByCandidateId.evaluations,
+              dishonests: interviewEntityByCandidateId.dishonests,
+            }),
+          });
+
+        const slackNotificationDuration = this.enhancedLogger.endTimer(
+          `slack-notification-${scheduleId}`,
+          LogCategory.NOTIFICATION,
+          slackNotificationSuccess
+            ? 'Slack notification sent successfully'
+            : 'Slack notification failed after retries',
+          {
+            interviewId: interviewEntityByCandidateId.interviewId.toString(),
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              success: slackNotificationSuccess,
+            },
+          },
+        );
+
+        if (!slackNotificationSuccess) {
+          this.enhancedLogger.warn(
+            LogCategory.NOTIFICATION,
+            '⚠️ Slack notification failed after all retry attempts',
+            {
+              interviewId: interviewEntityByCandidateId.interviewId.toString(),
+              candidateId: candidate.candidateId.toString(),
+              scheduleId,
+              metadata: {
+                candidateName: `${candidate.firstName} ${candidate.lastName}`,
+                completionReason,
+              },
+            },
+            'MeetingService',
+          );
+        }
+      } catch (error) {
+        // Catch any unexpected errors from Slack notification (shouldn't happen with new implementation)
+        this.enhancedLogger.error(
+          LogCategory.NOTIFICATION,
+          '❌ Unexpected error during Slack notification',
+          {
+            interviewId: interviewEntityByCandidateId.interviewId.toString(),
+            candidateId: candidate.candidateId.toString(),
+            scheduleId,
+            metadata: {
+              error: error.message,
+              errorStack: error.stack,
             },
           },
           'MeetingService',
         );
-      }
-    } catch (error) {
-      // Catch any unexpected errors from Slack notification (shouldn't happen with new implementation)
-      this.enhancedLogger.error(
-        LogCategory.NOTIFICATION,
-        '❌ Unexpected error during Slack notification',
-        {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
-          scheduleId,
-          metadata: {
-            error: error.message,
-            errorStack: error.stack,
-          },
-        },
-        'MeetingService',
-      );
-      
+
       this.logger.error(
-        `Unexpected error sending Slack notification for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
-        error.stack,
-      );
-      
+          `Unexpected error sending Slack notification for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
+          error.stack,
+        );
+
       // Continue with other background operations even if Slack fails
-      slackNotificationSuccess = false;
+        slackNotificationSuccess = false;
       }
 
       // Process API call
-      this.enhancedLogger.startTimer(`process-api-call-${candidate.candidateId}`);
+      this.enhancedLogger.startTimer(
+        `process-api-call-${candidate.candidateId}`,
+      );
       this.enhancedLogger.info(
         LogCategory.API,
         '🔄 Calling process API endpoint',
@@ -774,17 +811,18 @@ export class MeetingService {
 
       try {
         const cognitoIdToken = await this.cognitoAuthService.getIdToken();
-        const cognitoAccessToken = await this.cognitoAuthService.getAccessToken();
-        
+        const cognitoAccessToken =
+          await this.cognitoAuthService.getAccessToken();
+
         this.logger.debug('Process API call details:', {
           url: this.apiConfigService.processApiUrl,
           candidateId: candidate.candidateId,
           idTokenLength: cognitoIdToken?.length || 0,
           accessTokenLength: cognitoAccessToken?.length || 0,
-          idTokenPrefix: cognitoIdToken?.substring(0, 20) + '...',
-          accessTokenPrefix: cognitoAccessToken?.substring(0, 20) + '...'
+          idTokenPrefix: cognitoIdToken?.slice(0, 20) + '...',
+          accessTokenPrefix: cognitoAccessToken?.slice(0, 20) + '...',
         });
-        
+
         // Use ID token as it works in the AWS Authorizer test
         const processApiResponse = await axios.post(
           this.apiConfigService.processApiUrl,
@@ -797,7 +835,7 @@ export class MeetingService {
               // eslint-disable-next-line @typescript-eslint/naming-convention
               'Content-Type': 'application/json',
               // eslint-disable-next-line @typescript-eslint/naming-convention
-              'Authorization': `Bearer ${cognitoIdToken}`,
+              Authorization: `Bearer ${cognitoIdToken}`,
             },
           },
         );
@@ -839,17 +877,21 @@ export class MeetingService {
           config: {
             url: error.config?.url,
             method: error.config?.method,
-            headers: error.config?.headers
-          }
+            headers: error.config?.headers,
+          },
         });
-        
+
         // Check if it's a Cognito authentication error
-        const isCognitoError = error.message?.includes('Cognito authentication failed');
-        
+        const isCognitoError = error.message?.includes(
+          'Cognito authentication failed',
+        );
+
         this.enhancedLogger.endTimer(
           `process-api-call-${candidate.candidateId}`,
           LogCategory.API,
-          isCognitoError ? 'Process API call failed - Cognito authentication error' : 'Process API call failed',
+          isCognitoError
+            ? 'Process API call failed - Cognito authentication error'
+            : 'Process API call failed',
           {
             candidateId: candidate.candidateId.toString(),
             scheduleId,
@@ -895,20 +937,29 @@ export class MeetingService {
           metadata: {
             candidateName: `${candidate.firstName} ${candidate.lastName}`,
             finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-            completionReason: completionReason,
-            completionType: isFinishedEarly ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
+            completionReason,
+            completionType: isFinishedEarly
+              ? CompletionTypeEnum.EARLY
+              : CompletionTypeEnum.NORMAL,
           },
         },
       );
 
       // Final summary with completion type
       let finalMessage;
+
       if (completionReason === CompletionReasonEnum.TAB_CLOSE) {
-        finalMessage = `🚨 Interview completed due to TAB CLOSE! Background processing time: ${totalBackgroundDuration.toFixed(2)}ms`;
+        finalMessage = `🚨 Interview completed due to TAB CLOSE! Background processing time: ${totalBackgroundDuration.toFixed(
+          2,
+        )}ms`;
       } else if (isFinishedEarly) {
-        finalMessage = `⚠️ Interview completed EARLY! Background processing time: ${totalBackgroundDuration.toFixed(2)}ms`;
+        finalMessage = `⚠️ Interview completed EARLY! Background processing time: ${totalBackgroundDuration.toFixed(
+          2,
+        )}ms`;
       } else {
-        finalMessage = `🎉 Interview finished successfully! Background processing time: ${totalBackgroundDuration.toFixed(2)}ms`;
+        finalMessage = `🎉 Interview finished successfully! Background processing time: ${totalBackgroundDuration.toFixed(
+          2,
+        )}ms`;
       }
 
       this.enhancedLogger.success(
@@ -920,10 +971,12 @@ export class MeetingService {
           scheduleId,
           duration: totalBackgroundDuration,
           metadata: {
-            completionReason: completionReason,
-            completionType: isFinishedEarly ? CompletionTypeEnum.EARLY : CompletionTypeEnum.NORMAL,
-            finishedEarly: isFinishedEarly
-          }
+            completionReason,
+            completionType: isFinishedEarly
+              ? CompletionTypeEnum.EARLY
+              : CompletionTypeEnum.NORMAL,
+            finishedEarly: isFinishedEarly,
+          },
         },
         'MeetingService',
       );
@@ -997,6 +1050,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
         },
       },
     );
@@ -1016,7 +1070,9 @@ export class MeetingService {
       'MeetingService',
     );
 
-    const fileName = `CId-${candidate.candidateId}-SId-${scheduleId}-QId-${questionId}-${Date.now()}`;
+    const fileName = `CId-${
+      candidate.candidateId
+    }-SId-${scheduleId}-QId-${questionId}-${Date.now()}`;
 
     this.enhancedLogger.info(
       LogCategory.UPLOAD,
@@ -1136,11 +1192,17 @@ export class MeetingService {
       );
     }
 
-    this.enhancedLogger.startTimer(`db-find-or-create-evaluation-${questionId}`);
-    
+    this.enhancedLogger.startTimer(
+      `db-find-or-create-evaluation-${questionId}`,
+    );
+
     // Use database transaction with advisory lock to prevent race conditions
-    const lockId = `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(/[^a-zA-Z0-9_]/g, '_');
-    
+    const lockId =
+      `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(
+        /[^a-zA-Z0-9_]/g,
+        '_',
+      );
+
     this.enhancedLogger.info(
       LogCategory.DATABASE,
       '🔒 Using database advisory lock to prevent race conditions',
@@ -1157,7 +1219,8 @@ export class MeetingService {
       'MeetingService',
     );
 
-    const queryRunner = this.evaluationRepository.manager.connection.createQueryRunner();
+    const queryRunner =
+      this.evaluationRepository.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -1165,7 +1228,9 @@ export class MeetingService {
 
     try {
       // Acquire advisory lock
-      await queryRunner.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [lockId]);
+      await queryRunner.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        lockId,
+      ]);
 
       // Now safely check and create/update
       evaluationEntity = await queryRunner.manager.findOne('Evaluation', {
@@ -1194,7 +1259,10 @@ export class MeetingService {
         );
 
         evaluationEntity.videofileS3key = s3Uri;
-        evaluationEntity = await queryRunner.manager.save('Evaluation', evaluationEntity);
+        evaluationEntity = await queryRunner.manager.save(
+          'Evaluation',
+          evaluationEntity,
+        );
 
         this.enhancedLogger.endTimer(
           `db-find-or-create-evaluation-${questionId}`,
@@ -1254,10 +1322,9 @@ export class MeetingService {
       }
 
       await queryRunner.commitTransaction();
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      
+
       this.enhancedLogger.error(
         LogCategory.DATABASE,
         '❌ Database operation failed for camera recording',
@@ -1272,7 +1339,7 @@ export class MeetingService {
         },
         'MeetingService',
       );
-      
+
       throw error;
     } finally {
       await queryRunner.release();
@@ -1355,6 +1422,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
         },
       },
     );
@@ -1374,7 +1442,9 @@ export class MeetingService {
       'MeetingService',
     );
 
-    const fileName = `CId-${candidate.candidateId}-SId-${scheduleId}-QId-${questionId}-${Date.now()}-screen`;
+    const fileName = `CId-${
+      candidate.candidateId
+    }-SId-${scheduleId}-QId-${questionId}-${Date.now()}-screen`;
 
     this.enhancedLogger.info(
       LogCategory.UPLOAD,
@@ -1392,7 +1462,9 @@ export class MeetingService {
       'MeetingService',
     );
 
-    this.enhancedLogger.startTimer(`s3-screen-upload-${scheduleId}-${questionId}`);
+    this.enhancedLogger.startTimer(
+      `s3-screen-upload-${scheduleId}-${questionId}`,
+    );
     this.enhancedLogger.uploadEvent('Uploading screen recording to S3', {
       scheduleId,
       candidateId: candidate.candidateId.toString(),
@@ -1494,11 +1566,17 @@ export class MeetingService {
       );
     }
 
-    this.enhancedLogger.startTimer(`db-find-or-create-evaluation-${questionId}`);
-    
+    this.enhancedLogger.startTimer(
+      `db-find-or-create-evaluation-${questionId}`,
+    );
+
     // Use database transaction with advisory lock to prevent race conditions
-    const lockId = `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(/[^a-zA-Z0-9_]/g, '_');
-    
+    const lockId =
+      `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(
+        /[^a-zA-Z0-9_]/g,
+        '_',
+      );
+
     this.enhancedLogger.info(
       LogCategory.DATABASE,
       '🔒 Using database advisory lock to prevent race conditions',
@@ -1515,7 +1593,8 @@ export class MeetingService {
       'MeetingService',
     );
 
-    const queryRunner = this.evaluationRepository.manager.connection.createQueryRunner();
+    const queryRunner =
+      this.evaluationRepository.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
@@ -1523,7 +1602,9 @@ export class MeetingService {
 
     try {
       // Acquire advisory lock
-      await queryRunner.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [lockId]);
+      await queryRunner.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        lockId,
+      ]);
 
       // Now safely check and create/update
       evaluationEntity = await queryRunner.manager.findOne('Evaluation', {
@@ -1552,7 +1633,10 @@ export class MeetingService {
         );
 
         evaluationEntity.videofilename = s3Uri;
-        evaluationEntity = await queryRunner.manager.save('Evaluation', evaluationEntity);
+        evaluationEntity = await queryRunner.manager.save(
+          'Evaluation',
+          evaluationEntity,
+        );
 
         this.enhancedLogger.endTimer(
           `db-find-or-create-evaluation-${questionId}`,
@@ -1612,10 +1696,9 @@ export class MeetingService {
       }
 
       await queryRunner.commitTransaction();
-
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      
+
       this.enhancedLogger.error(
         LogCategory.DATABASE,
         '❌ Database operation failed for screen recording',
@@ -1630,7 +1713,7 @@ export class MeetingService {
         },
         'MeetingService',
       );
-      
+
       throw error;
     } finally {
       await queryRunner.release();
@@ -1712,6 +1795,7 @@ export class MeetingService {
         candidateId: scheduleEntity.candidateId.toString(),
         metadata: {
           jobId: scheduleEntity.jobId,
+          jUuid: scheduleEntity.jUuid,
           questionId,
         },
       },
@@ -2142,6 +2226,124 @@ export class MeetingService {
     return questionsListOrdered.toDtos();
   }
 
+  /**
+   * Get schedule and its associated data by schedule id for "see status" view.
+   * Returns schedule details, candidate, job, and derived status (SCHEDULED | IN_PROGRESS | COMPLETED).
+   */
+  async getScheduleStatusByScheduleId(
+    scheduleId: string,
+  ): Promise<ScheduleStatusResponseDto> {
+    const schedule = await this.scheduleRepository.findById(scheduleId);
+
+    let status: ScheduleStatusEnum = ScheduleStatusEnum.SCHEDULED;
+
+    if (schedule.attendedDatetime) {
+      const interview = await this.interviewRepository.findByCandidateId(
+        schedule.candidateId,
+      );
+      status = interview
+        ? ScheduleStatusEnum.COMPLETED
+        : ScheduleStatusEnum.IN_PROGRESS;
+    }
+
+    const job = schedule.job;
+    const manager = job?.manager;
+    const candidate = schedule.candidate;
+
+    // Report status: reportMaster by candidateId, reportScores by reportId
+
+    const reportMaster = await this.reportMasterRepository.findByCandidateId(
+      schedule.candidateId,
+    );
+    let reportStatus: ScheduleStatusResponseDto['reportStatus'];
+
+    // Report status: null when interview not done; COMPLETED/IN_PROGRESS when interview is COMPLETED
+    const reportStatusValue: ReportStatusEnum | null =
+      status !== ScheduleStatusEnum.COMPLETED
+        ? null
+        : (reportMaster
+          ? ReportStatusEnum.COMPLETED
+          : ReportStatusEnum.IN_PROGRESS);
+
+    if (reportMaster) {
+      const reportScores = await this.reportScoreRepository.findByReportId(
+        reportMaster.reportId,
+      );
+      const reportUrl = this.s3Service.generatePresignedUrlForEmail(
+        reportMaster.reportS3key,
+        60 * 60 * 24,
+      );
+      reportStatus = {
+        status: reportStatusValue,
+        reportMaster: {
+          reportId: reportMaster.reportId,
+          reportS3key: reportMaster.reportS3key,
+          reportUrl,
+          review: reportMaster.review ?? null,
+          createdAt: reportMaster.createdAt,
+          updatedAt: reportMaster.updatedAt,
+          reportScores: reportScores.map((rs) => ({
+            rsId: rs.rsId,
+            reportId: rs.reportId,
+            ts: rs.ts,
+            cs: rs.cs,
+            js: rs.js,
+            ds: rs.ds,
+            reportText: rs.reportText,
+            reportRemarks: rs.reportRemarks,
+            createdOn: rs.createdOn,
+            updatedAt: rs.updatedAt,
+          })),
+        },
+      };
+    } else {
+      reportStatus = { status: reportStatusValue, reportMaster: null };
+    }
+
+    return {
+      scheduleId: schedule.scheduleId,
+      status,
+      scheduledDatetime: schedule.scheduledDatetime,
+      meetingLink: schedule.meetingLink,
+      attendedDatetime: schedule.attendedDatetime,
+      createdOn: schedule.createdOn,
+      updatedAt: schedule.updatedAt,
+      candidateId: schedule.candidateId,
+      jobId: schedule.jobId,
+      jUuid: schedule.jUuid,
+      candidate: {
+        candidateId: candidate.candidateId,
+        email: candidate.email,
+        firstName: candidate.firstName ?? null,
+        lastName: candidate.lastName ?? null,
+        phoneNo: candidate.phoneNo ?? null,
+      },
+      job: {
+        jobId: job.jobId,
+        jUuid: job.jUuid,
+        jobTitle: job.jobTitle,
+        yearsOfExp: job.yearsOfExp ?? null,
+        jobDesc: job.jobDesc ?? null,
+        manager: manager
+          ? {
+              managerId: manager.managerId,
+              managerEmail: manager.managerEmail,
+              firstName: manager.firstName ?? null,
+              lastName: manager.lastName ?? null,
+              company: manager.company ?? null,
+            }
+          : {
+              managerId: '',
+              managerEmail: '',
+              firstName: null,
+              lastName: null,
+              company: null,
+            },
+      },
+      reportStatus,
+    };
+  }
+
   async initiateMultipartUpload(scheduleId: string) {
     const s3Key = `Complete_Interview/${scheduleId}/interview_${Date.now()}.webm`;
     const res = await this.s3Service.createMultipartUpload(s3Key);
@@ -2200,7 +2402,7 @@ export class MeetingService {
             managerId,
             startDate: getManagerReportDto.startDate,
             endDate: getManagerReportDto.endDate,
-            jobId: getManagerReportDto.jobId,
+            jUuid: getManagerReportDto.jUuid,
             includeHierarchy: getManagerReportDto.includeHierarchy,
             managerJobFilters: getManagerReportDto.managerJobFilters,
           },
@@ -2250,7 +2452,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
         );
       this.enhancedLogger.endTimer(`db-fetch-schedules-${managerId}`);
 
@@ -2263,7 +2465,7 @@ export class MeetingService {
             schedulesCount: schedules.length,
             startDate,
             endDate,
-            jobId: getManagerReportDto.jobId,
+            jUuid: getManagerReportDto.jUuid,
           },
         },
         'MeetingService',
@@ -2276,7 +2478,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
         );
       this.enhancedLogger.endTimer(`db-fetch-resumes-${managerId}`);
 
@@ -2289,7 +2491,7 @@ export class MeetingService {
             resumesCount: resumes.length,
             startDate,
             endDate,
-            jobId: getManagerReportDto.jobId,
+            jUuid: getManagerReportDto.jUuid,
           },
         },
         'MeetingService',
@@ -2362,7 +2564,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
           timeConfig,
           getManagerReportDto.managerJobFilters,
         );
@@ -2388,7 +2590,7 @@ export class MeetingService {
           managerId,
           startDate,
           endDate,
-          getManagerReportDto.jobId,
+          getManagerReportDto.jUuid,
           timeConfig,
           getManagerReportDto.managerJobFilters,
         );
@@ -2526,7 +2728,7 @@ export class MeetingService {
       interviewHrs: number;
       followupHrs: number;
     },
-    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    _managerJobFilters?: Array<{ managerId: string; jUuid?: string }>,
     isTopLevel = true, // New parameter to distinguish top-level vs recursive calls
   ): Promise<HierarchicalReportDto[]> {
     const hierarchicalReports: HierarchicalReportDto[] = [];
@@ -2704,7 +2906,7 @@ export class MeetingService {
       interviewHrs: number;
       followupHrs: number;
     },
-    _managerJobFilters?: Array<{ managerId: string; jobId?: string }>,
+    _managerJobFilters?: Array<{ managerId: string; jUuid?: string }>,
   ): Promise<{
     allSchedules: Schedule[];
     allResumes: Array<{ createdOn: string | number | Date }>; // JobShortlistedProfiles[]
@@ -2715,7 +2917,7 @@ export class MeetingService {
   }> {
     const allSchedules: Schedule[] = [];
     const allResumes: Array<{ createdOn: string | number | Date }> = []; // JobShortlistedProfiles[]
-    const allJobs: Array<{ jobId: string; jobTitle: string }> = [];
+    const allJobs: Array<{ jUuid: string; jobTitle: string }> = [];
 
     // Ensure we have fallback values for timeConfig
     const safeTimeConfig = timeConfig || {
@@ -2754,7 +2956,7 @@ export class MeetingService {
       );
       allJobs.push(
         ...managerJobs.map((job) => ({
-          jobId: job.jobId,
+          jUuid: job.jUuid,
           jobTitle: job.jobTitle || '',
         })),
       );
@@ -2777,7 +2979,7 @@ export class MeetingService {
     // Remove duplicate jobs based on jobId
     const uniqueJobs = allJobs.filter(
       (job, index, self) =>
-        index === self.findIndex((j) => j.jobId === job.jobId),
+        index === self.findIndex((j) => j.jUuid === job.jUuid),
     );
 
     const totalInvitesShared = allSchedules.length;
