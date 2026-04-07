@@ -2271,7 +2271,7 @@ export class MeetingService {
       );
       const reportUrl = this.s3Service.generatePresignedUrlForEmail(
         reportMaster.reportS3key,
-        60 * 60 * 24,
+        60 * 60 * 24 * 7,
       );
       reportStatus = {
         status: reportStatusValue,
