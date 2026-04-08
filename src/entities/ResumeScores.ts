@@ -37,11 +37,14 @@ export class ResumeScores {
   @Column({ name: 'candidate_id', type: 'bigint'})
   candidateId: number;
 
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid: string;
+
   @Column({ name: 'criteria_id', type: 'bigint'})
   criteriaId: number;
 
   @ManyToOne(() => Candidate, (candidate) => candidate.resumeScores)
-  @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
+  @JoinColumn([{ name: 'c_uuid', referencedColumnName: 'cUuid' }])
   candidate: Candidate;
 
   @ManyToOne(

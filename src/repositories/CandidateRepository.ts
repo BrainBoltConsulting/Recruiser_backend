@@ -1,8 +1,8 @@
-
+import { NotFoundException } from '@nestjs/common';
 import { Repository } from 'typeorm';
+
 import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { Candidate } from '../entities/Candidate';
-import { Manager } from '../entities/Manager';
 
 @CustomRepository(Candidate)
 export class CandidateRepository extends Repository<Candidate> {
@@ -19,24 +19,22 @@ export class CandidateRepository extends Repository<Candidate> {
       .getOne();
   }
 
-  async findByCandidateId(id: number): Promise<Candidate | null> {
-    return this.createQueryBuilder('candidate')
-      .where('candidate.candidateId = :id', { id })
+  async findByCUuid(cUuid: string): Promise<Candidate> {
+    const entity = await this.createQueryBuilder('candidate')
+      .where('candidate.cUuid = :cUuid', { cUuid })
       .getOne();
+
+    if (!entity) {
+      throw new NotFoundException(`Candidate not found with c_uuid: ${cUuid}`);
+    }
+
+    return entity;
   }
 
   async getAllSorted(): Promise<Candidate[]> {
     return this.createQueryBuilder('candidate')
       .orderBy('candidate.createdAt', 'DESC')
       .getMany();
-  }
-
-  async findById(id: string): Promise<Candidate> {
-    const entity = await this.createQueryBuilder('candidate')
-      .where('candidate.candidateId = :id', { id })
-      .getOne();
-
-    return entity;
   }
 
   async getWithLoginData(email: string) {
@@ -46,11 +44,11 @@ export class CandidateRepository extends Repository<Candidate> {
       .getOne();
   }
 
-  async findManagerByCandidateId(candidateId: number): Promise<Candidate | null> {
+  async findManagerByCUuid(cUuid: string): Promise<Candidate | null> {
     return this.createQueryBuilder('candidate')
       .leftJoinAndSelect('candidate.jobShortlistedProfiles', 'shortlist')
       .leftJoinAndSelect('shortlist.manager', 'manager')
-      .where('candidate.candidateId = :candidateId', { candidateId })
+      .where('candidate.cUuid = :cUuid', { cUuid })
       .andWhere('shortlist.manager IS NOT NULL')
       .getOne();
   }

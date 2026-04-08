@@ -48,8 +48,11 @@ export class Schedule {
   @Column({ name: 'candidate_id', type: 'bigint' })
   candidateId: number;
 
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid: string;
+
   @ManyToOne(() => Candidate, (candidate) => candidate.schedules)
-  @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
+  @JoinColumn([{ name: 'c_uuid', referencedColumnName: 'cUuid' }])
   candidate: Candidate;
 
   @ManyToOne(() => Jobs, (jobs) => jobs.schedules)

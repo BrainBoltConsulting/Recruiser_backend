@@ -36,18 +36,18 @@ export class ScheduleRepository extends Repository<Schedule> {
     return entity;
   }
 
-  async findByCandidateId(candidateId: number): Promise<Schedule[] | null> {
+  async findByCUuid(cUuid: string): Promise<Schedule[] | null> {
     return this.createQueryBuilder('schedule')
-      .where('schedule.candidateId = :candidateId', { candidateId })
+      .where('schedule.cUuid = :cUuid', { cUuid })
       .getMany();
   }
 
-  async findByCandidateAndJUuid(
-    candidateId: string,
+  async findByCUuidAndJUuid(
+    cUuid: string,
     jUuid: string,
   ): Promise<Schedule | null> {
     return this.createQueryBuilder('schedule')
-      .where('schedule.candidateId = :candidateId', { candidateId })
+      .where('schedule.cUuid = :cUuid', { cUuid })
       .andWhere('schedule.jUuid = :jUuid', { jUuid })
       .getOne();
   }

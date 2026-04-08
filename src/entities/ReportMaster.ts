@@ -38,11 +38,14 @@ export class ReportMaster {
   @Column({ type: 'integer', name: 'candidate_id' })
   candidateId: number;
 
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid: string;
+
   @Column('integer', { name: 'review', nullable: true, default: 0 })
   review: number | null;
 
   @ManyToOne(() => Candidate, (candidate) => candidate.reportMasters)
-  @JoinColumn([{ name: 'candidate_id', referencedColumnName: 'candidateId' }])
+  @JoinColumn([{ name: 'c_uuid', referencedColumnName: 'cUuid' }])
   candidate: Candidate;
 
   @OneToMany(() => ReportScore, (reportScore) => reportScore.reportMaster)

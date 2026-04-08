@@ -6,7 +6,7 @@ interface LogContext {
   userId?: string;
   scheduleId?: string;
   interviewId?: string;
-  candidateId?: string;
+  cUuid?: string;
   duration?: number;
   metadata?: Record<string, any>;
 }
@@ -123,8 +123,8 @@ export class EnhancedLoggerService {
       parts.push(`🎥 ${this.colors.magenta}Interview:${context.interviewId}${this.colors.reset}`);
     }
     
-    if (context.candidateId) {
-      parts.push(`👤 ${this.colors.cyan}Candidate:${context.candidateId}${this.colors.reset}`);
+    if (context.cUuid) {
+      parts.push(`👤 ${this.colors.cyan}Candidate:${context.cUuid}${this.colors.reset}`);
     }
     
     if (context.duration !== undefined) {

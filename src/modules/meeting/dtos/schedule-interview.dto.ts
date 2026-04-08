@@ -4,7 +4,7 @@ import { IsString } from "class-validator";
 export class ScheduleInterviewDto {
     @ApiProperty()
     @IsString()
-    candidateId: string;
+    cUuid: string;
 
     @ApiProperty()
     @IsString()

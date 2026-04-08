@@ -5,9 +5,9 @@ import { ReportMaster } from '../entities/ReportMaster';
 
 @CustomRepository(ReportMaster)
 export class ReportMasterRepository extends Repository<ReportMaster> {
-  async findByCandidateId(candidateId: number): Promise<ReportMaster | null> {
+  async findByCUuid(cUuid: string): Promise<ReportMaster | null> {
     return this.createQueryBuilder('report_master')
-      .where('report_master.candidate_id = :candidateId', { candidateId })
+      .where('report_master.cUuid = :cUuid', { cUuid })
       .andWhere(
         '(report_master.is_deleted IS NULL OR report_master.is_deleted = false)',
       )
@@ -15,9 +15,9 @@ export class ReportMasterRepository extends Repository<ReportMaster> {
       .getOne();
   }
 
-  async findAllByCandidateId(candidateId: number): Promise<ReportMaster[]> {
+  async findAllByCUuid(cUuid: string): Promise<ReportMaster[]> {
     return this.createQueryBuilder('report_master')
-      .where('report_master.candidate_id = :candidateId', { candidateId })
+      .where('report_master.cUuid = :cUuid', { cUuid })
       .andWhere(
         '(report_master.is_deleted IS NULL OR report_master.is_deleted = false)',
       )

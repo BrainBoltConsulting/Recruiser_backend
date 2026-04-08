@@ -25,7 +25,7 @@ export class FrontendLogEventDto {
 
   @ApiProperty({
     description: 'Additional metadata for the log event',
-    example: { candidateId: '123', scheduleId: 456, browser: 'Chrome' }
+    example: { cUuid: 'asdas0-asdasd-asdasd-asdasd', scheduleId: 456, browser: 'Chrome' }
   })
   @IsObject()
   @IsOptional()

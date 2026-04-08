@@ -34,8 +34,11 @@ export class JobShortlistedProfiles {
   @Column("timestamp without time zone", { name: "updated_at", nullable: true })
   updatedAt: Date | null;
 
+  @Column("uuid", { name: "c_uuid" })
+  cUuid: string;
+
   @ManyToOne(() => Candidate, (candidate) => candidate.jobShortlistedProfiles)
-  @JoinColumn([{ name: "candidate_id", referencedColumnName: "candidateId" }])
+  @JoinColumn([{ name: "c_uuid", referencedColumnName: "cUuid" }])
   candidate: Candidate;
 
   @Column("uuid", { name: "j_uuid" })

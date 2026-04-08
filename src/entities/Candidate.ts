@@ -1,4 +1,6 @@
+import { randomUUID } from 'crypto';
 import {
+  BeforeInsert,
   Column,
   Entity,
   Index,
@@ -23,6 +25,9 @@ import { Schedule } from './Schedule';
 export class Candidate {
   @PrimaryGeneratedColumn({ type: 'bigint', name: 'candidate_id' })
   candidateId: number;
+
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid!: string;
 
   @Column('text', { name: 'domain', nullable: true })
   domain: string | null;
@@ -108,4 +113,11 @@ export class Candidate {
 
   @OneToMany(() => Schedule, (schedule) => schedule.candidate)
   schedules: Schedule[];
+
+  @BeforeInsert()
+  setCUuid(): void {
+    if (!this.cUuid) {
+      this.cUuid = randomUUID();
+    }
+  }
 }

@@ -38,6 +38,9 @@ export class Interview {
   @Column({ nullable: true, name: 'candidate_id' })
   candidateId: number;
 
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid: string;
+
   @Column('timestamp without time zone', { name: 'updated_at', nullable: true })
   updatedAt: Date | null;
 
@@ -61,7 +64,7 @@ export class Interview {
   evaluations: Evaluation[];
 
   @ManyToOne(() => Candidate, (candidate) => candidate.interviews)
-  @JoinColumn([{ name: 'candidate_id', referencedColumnName: 'candidateId' }])
+  @JoinColumn([{ name: 'c_uuid', referencedColumnName: 'cUuid' }])
   candidate: Candidate;
 
   @ManyToOne(() => Manager, (manager) => manager.interviews)

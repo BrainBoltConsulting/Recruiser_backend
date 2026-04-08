@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   InternalServerErrorException,
 } from '@nestjs/common';
@@ -8,9 +7,8 @@ import axios from 'axios';
 import { Transactional } from 'typeorm-transactional';
 
 import { Role } from '../../constants/role.enum';
-import { TokenTypeEnum } from '../../constants/token-type.enum';
 import type { Candidate } from '../../entities/Candidate';
-import { UtilsProvider } from '../../providers/utils.provider';
+import type { Manager } from '../../entities/Manager';
 import { CandidateRepository } from '../../repositories/CandidateRepository';
 import { CommunicationScoresRepository } from '../../repositories/CommunicationScoresRepository';
 import { DishonestRepository } from '../../repositories/DishonestRepository';
@@ -23,19 +21,9 @@ import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { TechnicalScoresRepository } from '../../repositories/TechnicalScoresRepository';
 import { VocabScoreRepository } from '../../repositories/VocabScoreRepository';
 import { ApiConfigService } from '../../shared/services/api-config.service';
-import { S3Service } from '../../shared/services/aws-s3.service';
 import { MailService } from '../../shared/services/mail.service';
-import { UrlService } from '../../shared/services/url.service';
 import type { RegistrationDto } from '../auth/dtos/registration.dto';
-import { UserUnauthenticatedException } from '../auth/exceptions/user-unauthenticated.exception';
-import { JwtStrategy } from '../auth/jwt.strategy';
-import { UserTokenService } from '../auth/user-token.service';
-import { UserDto } from '../common/modules/user/user.dto';
-import { MeetingService } from '../meeting/meeting.service';
 import { SkillService } from '../skill/skill.service';
-import type { GetUsersDto } from './dtoes/get-users.dto';
-import { UpdatePasswordDto } from './dtoes/update-password.dto';
-import { UpdateUserDto } from './dtoes/update-user.dto';
 import { UserNotFoundException } from './exceptions/user-not-found.exception';
 
 @Injectable()
@@ -53,18 +41,19 @@ export class CandidateService {
     public readonly vocabScoreRepository: VocabScoreRepository,
     public readonly dishonestSsRepository: DishonestSsRepository,
     public readonly loginRepository: LoginRepository,
-    public readonly meetingService: MeetingService,
-    public readonly s3Service: S3Service,
     public readonly mailService: MailService,
-    private readonly jwtService: JwtStrategy,
-    public readonly userTokenService: UserTokenService,
-    public readonly urlService: UrlService,
     private readonly apiConfigService: ApiConfigService,
   ) {}
 
   @Transactional()
   async create(data: Partial<RegistrationDto>) {
     try {
+      if (typeof data.skillId !== 'number' || Number.isNaN(data.skillId)) {
+        throw new BadRequestException('skillId is required');
+      }
+
+      const skillId: number = data.skillId;
+
       const loginEntity = await this.loginRepository.save(
         this.loginRepository.create({
           loginUsername: data.email,
@@ -87,8 +76,8 @@ export class CandidateService {
       });
 
       await this.skillService.createSkillForCadidate(
-        data.skillId,
-        entity.candidateId,
+        skillId,
+        String(entity.cUuid),
       );
 
       return entity;
@@ -109,130 +98,6 @@ export class CandidateService {
     return entity;
   }
 
-  async getEntityById(id: string, withoutException?: boolean) {
-    const entity = await this.candidateRepository.findById(id);
-
-    if (!entity && !withoutException) {
-      throw new UserNotFoundException();
-    }
-
-    return entity;
-  }
-
-  @Transactional()
-  async sendInvitationViaEmail(email: string): Promise<void> {
-    const userByEmail = await this.candidateRepository.findByEmail(email);
-
-    if (!userByEmail) {
-      throw new UserNotFoundException();
-    }
-
-    const token = this.jwtService.generateToken({
-      payload: {
-        id: userByEmail.candidateId,
-        user: userByEmail,
-        // user: userByEmail.toDto({isAccess: true}),
-        type: TokenTypeEnum.SET_PASSWORD,
-      },
-    });
-
-    await this.userTokenService.upsert({
-      token,
-      userId: userByEmail.candidateId,
-      type: TokenTypeEnum.SET_PASSWORD,
-    });
-
-    // await this.mailService.send({
-    //   to: userByEmail.email,
-    //   subject: "You're Invited! Join Your Meeting on Canint",
-    //   // tmp solution
-    //   html: this.mailService.sendInvitationForAMeeting(userByEmail.firstName, "userByEmail", ),
-    // });
-  }
-
-  async getUserById(id: number) {
-    const entity = await this.candidateRepository.findByCandidateId(id);
-
-    //return entity.toDto();
-    return entity;
-  }
-
-  @Transactional()
-  async updateUser(id: number, user: UserDto, updateUserDto: UpdateUserDto) {
-    if (Object.keys(updateUserDto).length > 0) {
-      await this.candidateRepository.update(id, {
-        firstName: user.firstName,
-      });
-    }
-
-    return this.candidateRepository.findByCandidateId(id);
-
-    // return (await this.candidateRepository.findById(id)).toDto({isAccess: true});
-  }
-
-  async getAllUsers(_getUsersDto: GetUsersDto): Promise<Candidate[]> {
-    const userEntitiesQuery = await this.candidateRepository.getAllSorted();
-
-    // const [userEntities, pageMetaDto] = await userEntitiesQuery.paginate(
-    //   getUsersDto
-    // );
-
-    return userEntitiesQuery;
-  }
-
-  @Transactional()
-  async updateUserPassword(
-    id: string,
-    user: UserDto,
-    body: UpdatePasswordDto,
-  ): Promise<void> {
-    if (id !== user.id) {
-      throw new ForbiddenException();
-    }
-
-    const userEntity = await this.getEntityByEmail(user.email);
-
-    await this.validateUserPassword(userEntity, body.oldPassword);
-
-    if (body.newPassword !== body.confirmNewPassword) {
-      throw new BadRequestException('Passwords do not match');
-    }
-
-    if (body.oldPassword === body.newPassword) {
-      throw new BadRequestException(
-        'New password cannot be the same as old password',
-      );
-    }
-
-    // await this.addOrResetPassword(id, body.newPassword);
-  }
-
-  async validateUserPassword(userEntity: Candidate, password: string) {
-    const isPasswordValid = await UtilsProvider.validateHash(
-      password,
-      // tmp solution
-      'userEntity.password',
-    );
-
-    if (!isPasswordValid) {
-      throw new UserUnauthenticatedException('password is an invalid');
-    }
-
-    return userEntity;
-  }
-
-  async getCandidatesInterviews(candidateId: number) {
-    await this.candidateRepository.findByCandidateId(candidateId);
-
-    return this.meetingService.getInterviewsOfCandidate(candidateId);
-  }
-
-  @Transactional()
-  async deleteUser(id: number): Promise<void> {
-    await this.candidateRepository.findByCandidateId(id);
-    await this.candidateRepository.delete(id);
-  }
-
   async getCandidateWithLoginData(email: string) {
     const candidateEntity = await this.candidateRepository.getWithLoginData(
       email,
@@ -242,16 +107,17 @@ export class CandidateService {
   }
 
   @Transactional()
-  async deleteCandidateInterviews(id: number) {
-    await this.candidateRepository.findByCandidateId(id);
+  async deleteCandidateInterviews(cUuid: string) {
+    await this.candidateRepository.findByCUuid(cUuid);
 
-    const interviews =
-      await this.interviewRepository.findAllInterviewsByCandidateId(id);
+    const interviews = await this.interviewRepository.findAllInterviewsByCUuid(
+      cUuid,
+    );
 
     for (const interview of interviews) {
       if (interview.evaluations?.length) {
         // First delete all score-related data associated with these evaluations
-        const evaluationIds = interview.evaluations.map(
+        const evaluationIds: string[] = interview.evaluations.map(
           (ev) => ev.evaluationId,
         );
 
@@ -293,10 +159,11 @@ export class CandidateService {
       }
 
       if (interview.dishonests?.length) {
-        // eslint-disable-next-line no-await-in-loop
-        await this.dishonestRepository.delete(
-          interview.dishonests.map((dis) => dis.dishonestId),
+        const dishonestIds: string[] = interview.dishonests.map(
+          (dis) => dis.dishonestId,
         );
+        // eslint-disable-next-line no-await-in-loop
+        await this.dishonestRepository.delete(dishonestIds);
       }
 
       // Delete vocab scores associated with this interview
@@ -311,19 +178,46 @@ export class CandidateService {
 
       // Finally delete the interview
       // eslint-disable-next-line no-await-in-loop
-      await this.interviewRepository.delete(interview.interviewId);
+      await this.interviewRepository.delete({
+        interviewId: interview.interviewId,
+      });
     }
 
     return interviews;
   }
 
+  private getInterviewCompletionNotificationHtml(
+    candidateManagerData: Candidate,
+    manager: Manager,
+  ): string {
+    const firstName = candidateManagerData.firstName || '';
+    const middleName = candidateManagerData.middleName;
+    const lastName = candidateManagerData.lastName || '';
+
+    return this.mailService.sendInterviewCompletionNotification(
+      String(firstName),
+      middleName == null ? null : String(middleName),
+      String(lastName),
+      candidateManagerData.cUuid,
+      {
+        managerEmail: String(manager.managerEmail),
+        firstName: manager.firstName == null ? null : String(manager.firstName),
+        middleName:
+          manager.middleName == null ? null : String(manager.middleName),
+        lastName: manager.lastName == null ? null : String(manager.lastName),
+        company: manager.company == null ? null : String(manager.company),
+        logoS3key: manager.logoS3key == null ? null : String(manager.logoS3key),
+      },
+    );
+  }
+
   @Transactional()
   async sendInterviewCompletionNotificationToManager(
-    candidateId: number,
+    cUuid: string,
   ): Promise<void> {
     try {
       const candidateManagerData =
-        await this.candidateRepository.findManagerByCandidateId(candidateId);
+        await this.candidateRepository.findManagerByCUuid(cUuid);
 
       if (!candidateManagerData) {
         throw new UserNotFoundException();
@@ -343,30 +237,23 @@ export class CandidateService {
       const fullName = [firstName, middleName, lastName]
         .filter(Boolean)
         .join(' ');
-      const displayName = fullName || `Candidate ${candidateId}`;
-      const subject = `Interview Completion Notification – ${displayName} (Candidate ID: ${candidateId})`;
+      const displayName =
+        fullName || `Candidate ${candidateManagerData.cUuid} (c_uuid)`;
+      const subject = `Interview Completion Notification – ${displayName} (Candidate ID: ${candidateManagerData.cUuid} (c_uuid))`;
+
+      const html = this.getInterviewCompletionNotificationHtml(
+        candidateManagerData,
+        manager,
+      );
 
       await this.mailService.send({
-        to: manager.managerEmail,
+        to: String(manager.managerEmail),
         subject,
-        html: this.mailService.sendInterviewCompletionNotification(
-          firstName,
-          middleName,
-          lastName,
-          candidateManagerData.candidateId.toString(),
-          {
-            managerEmail: manager.managerEmail,
-            firstName: manager.firstName,
-            middleName: manager.middleName,
-            lastName: manager.lastName,
-            company: manager.company,
-            logoS3key: manager.logoS3key,
-          },
-        ),
+        html,
       });
 
       // Notify assessment/Greenhouse that the test is completed (internal resources)
-      await this.notifyAssessmentMarkCompleted(candidateId);
+      await this.notifyAssessmentMarkCompleted(cUuid);
     } catch (error) {
       if (
         error instanceof UserNotFoundException ||
@@ -388,9 +275,7 @@ export class CandidateService {
    * Uses scheduleId from the schedule table for this candidate (most recent schedule).
    * Does not throw: failures are logged but do not affect the main notification flow.
    */
-  private async notifyAssessmentMarkCompleted(
-    candidateId: number,
-  ): Promise<void> {
+  private async notifyAssessmentMarkCompleted(cUuid: string): Promise<void> {
     const { baseUrl, username, password } =
       this.apiConfigService.assessmentConfig;
 
@@ -398,13 +283,11 @@ export class CandidateService {
       return;
     }
 
-    const schedules = await this.scheduleRepository.findByCandidateId(
-      candidateId,
-    );
+    const schedules = await this.scheduleRepository.findByCUuid(cUuid);
 
     if (!schedules?.length) {
       console.warn(
-        `[notifyAssessmentMarkCompleted] No schedule found for candidateId=${candidateId}, skipping assessment API call`,
+        `[notifyAssessmentMarkCompleted] No schedule found for cUuid=${cUuid}, skipping assessment API call`,
       );
 
       return;
@@ -434,12 +317,12 @@ export class CandidateService {
 
       if (response.status !== 204) {
         console.warn(
-          `[notifyAssessmentMarkCompleted] Assessment API returned ${response.status} for candidateId=${candidateId}, scheduleId=${scheduleId}`,
+          `[notifyAssessmentMarkCompleted] Assessment API returned ${response.status} for cUuid=${cUuid}, scheduleId=${scheduleId}`,
         );
       }
     } catch (error) {
       console.error(
-        `[notifyAssessmentMarkCompleted] Assessment API call failed for candidateId=${candidateId}, scheduleId=${scheduleId}:`,
+        `[notifyAssessmentMarkCompleted] Assessment API call failed for cUuid=${cUuid}, scheduleId=${scheduleId}:`,
         error instanceof Error ? error.message : error,
       );
     }
