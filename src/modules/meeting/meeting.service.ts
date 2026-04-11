@@ -808,10 +808,12 @@ export class MeetingService {
         };
         processApiHeaders['Content-Type'] = 'application/json';
 
+        const candidateUuid = String(candidate.cUuid);
         const processApiResponse = await axios.post(
           this.apiConfigService.processApiUrl,
           {
-            cUuid: String(candidate.cUuid),
+            cUuid: candidateUuid,
+            c_uuid: candidateUuid,
           },
           {
             timeout: 30_000, // 30 seconds timeout
