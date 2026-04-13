@@ -157,7 +157,7 @@ export class SlackNotificationService {
     scheduleId: string;
     jobId: string;
     jUuid: string;
-    candidate: { id: string; fullName: string };
+    candidate: { fullName: string; cUuid?: string };
     browser: string;
     attendedTime: Date;
     finishedEarly: boolean;
@@ -238,7 +238,7 @@ export class SlackNotificationService {
         fields: [
           { type: 'mrkdwn', text: safeText(`*Interview ID:*\n${interview.interviewId || 'N/A'}`) },
           { type: 'mrkdwn', text: safeText(`*Schedule ID:*\n${interview.scheduleId || 'N/A'}`) },
-          { type: 'mrkdwn', text: safeText(`*Candidate ID:*\n${interview.candidate?.id || 'N/A'}`) },
+          { type: 'mrkdwn', text: safeText(`*Candidate cUuid:*\n${interview.candidate?.cUuid || 'N/A'}`) },
           { type: 'mrkdwn', text: safeText(`*Job ID:*\n${interview.jobId || 'N/A'}`) },
           { type: 'mrkdwn', text: safeText(`*J UUID:*\n${interview.jUuid || 'N/A'}`) },
           { type: 'mrkdwn', text: safeText(`*Browser:*\n${interview.browser || 'N/A'}`) },

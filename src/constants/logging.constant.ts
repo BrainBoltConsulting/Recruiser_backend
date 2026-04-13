@@ -4,7 +4,7 @@ export interface LogContext {
   userId?: string;
   scheduleId?: number;
   questionId?: string;
-  candidateId?: string;
+  cUuid?: string;
   sessionId?: string;
   browser?: string;
   timestamp?: number;

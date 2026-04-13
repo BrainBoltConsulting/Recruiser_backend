@@ -177,42 +177,6 @@ export class MeetingController {
     );
   }
 
-  @Post('/schedule/:scheduleId/interview-multipart-chunk')
-  @UseInterceptors(FileInterceptor('chunk'))
-  @HttpCode(HttpStatus.OK)
-  async uploadMultipartChunk(
-    @Param('scheduleId') scheduleId: string,
-    @UploadedFile() chunk: Express.Multer.File,
-    @Body() body: { uploadId: string; partNumber: number; s3Key: string },
-  ) {
-    return this.meetingService.uploadMultipartChunk(
-      scheduleId,
-      body.s3Key,
-      chunk,
-      body.uploadId,
-      body.partNumber,
-    );
-  }
-
-  @Post('/schedule/:scheduleId/interview-multipart-complete')
-  @HttpCode(HttpStatus.OK)
-  async completeMultipartUpload(
-    @Param('scheduleId') scheduleId: string,
-    @Body()
-    body: {
-      uploadId: string;
-      parts: Array<{ ETag: string; PartNumber: number }>;
-      s3Key: string;
-    },
-  ) {
-    return this.meetingService.completeMultipartUpload(
-      scheduleId,
-      body.s3Key,
-      body.uploadId,
-      body.parts,
-    );
-  }
-
   @Get('/manager/:managerId/report')
   @UseGuards(CognitoAuthGuard)
   @ApiBearerAuth('cognito')

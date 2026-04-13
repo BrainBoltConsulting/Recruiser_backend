@@ -9,6 +9,9 @@ export class CandidateSkills {
   @Column('bigint', { primary: true, name: 'candidate_id' })
   candidateId: number;
 
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid: string;
+
   @Column('integer', { primary: true, name: 'skill_id' })
   skillId: number;
 
@@ -23,7 +26,7 @@ export class CandidateSkills {
   lastUsedYear: number | null;
 
   @ManyToOne(() => Candidate, (candidate) => candidate.candidateSkills)
-  @JoinColumn([{ name: 'candidate_id', referencedColumnName: 'candidateId' }])
+  @JoinColumn([{ name: 'c_uuid', referencedColumnName: 'cUuid' }])
   candidate: Candidate;
 
   @ManyToOne(() => Skills, (skills) => skills.candidateSkills)

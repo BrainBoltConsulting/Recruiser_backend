@@ -7,15 +7,15 @@ import { CandidateSkills } from '../entities/CandidateSkills';
 @CustomRepository(CandidateSkills)
 export class CandidateSkillsRepository extends Repository<CandidateSkills> {
 
-  async findByCandidateId(candidateId: string): Promise<CandidateSkills | null> {
+  async findByCUuid(cUuid: string): Promise<CandidateSkills | null> {
     return this.createQueryBuilder('candidateskills')
-      .where('candidateskills.candidateId = :candidateId', { candidateId })
+      .where('candidateskills.cUuid = :cUuid', { cUuid })
       .getOne();
   }
 
-  async findByCandidateIdAndSkill(candidateId: number, skillId: number) {
+  async findByCUuidAndSkill(cUuid: string, skillId: number) {
     return this.createQueryBuilder('candidateskills')
-      .where('candidateskills.candidateId = :candidateId', { candidateId })
+      .where('candidateskills.cUuid = :cUuid', { cUuid })
       .andWhere('candidateskills.skillId = :skillId', { skillId })
       .getOne();
   }

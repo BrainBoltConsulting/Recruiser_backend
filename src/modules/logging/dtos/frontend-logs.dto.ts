@@ -12,7 +12,7 @@ export class FrontendLogsDto {
         level: 'INFO',
         message: 'User started interview session',
         timestamp: '2024-01-15T10:30:00.000Z',
-        metadata: { candidateId: '123', scheduleId: 456 },
+        metadata: { cUuid: 'asdas0-asdasd-asdasd-asdasd', scheduleId: 456 },
         source: 'canint-frontend',
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         url: 'https://app.canint.com/meeting/123',

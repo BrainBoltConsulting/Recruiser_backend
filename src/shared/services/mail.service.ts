@@ -195,7 +195,7 @@ export class MailService {
     candidateFirstName: string,
     candidateMiddleName: string | null,
     candidateLastName: string,
-    candidateId: string,
+    cUuid: string,
     manager: {
       managerEmail: string;
       firstName: string | null;

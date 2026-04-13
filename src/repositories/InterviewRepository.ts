@@ -1,7 +1,7 @@
-
-import { Repository } from 'typeorm';
-import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { NotFoundException } from '@nestjs/common';
+import { Repository } from 'typeorm';
+
+import { CustomRepository } from '../db/typeorm-ex.decorator';
 import { Interview } from '../entities/Interview';
 
 @CustomRepository(Interview)
@@ -31,23 +31,23 @@ export class InterviewRepository extends Repository<Interview> {
     return entity;
   }
 
-  async findByCandidateId(candidateId: number): Promise<Interview | null> {
-      return this.createQueryBuilder('interview')
-        .where('interview.candidateId = :candidateId', { candidateId })
-        .getOne();
+  async findByCUuid(cUuid: string): Promise<Interview | null> {
+    return this.createQueryBuilder('interview')
+      .where('interview.cUuid = :cUuid', { cUuid })
+      .getOne();
   }
 
-  async findByCandidateIdExtended(candidateId: number): Promise<Interview | null> {
+  async findByCUuidExtended(cUuid: string): Promise<Interview | null> {
     return this.createQueryBuilder('interview')
-      .where('interview.candidateId = :candidateId', { candidateId })
+      .where('interview.cUuid = :cUuid', { cUuid })
       .leftJoinAndSelect('interview.evaluations', 'evaluations')
       .leftJoinAndSelect('interview.dishonests', 'dishonests')
       .getOne();
   }
 
-  async findAllInterviewsByCandidateId(candidateId: number): Promise<Interview[] | null> {
+  async findAllInterviewsByCUuid(cUuid: string): Promise<Interview[] | null> {
     return this.createQueryBuilder('interview')
-      .where('interview.candidateId = :candidateId', { candidateId })
+      .where('interview.cUuid = :cUuid', { cUuid })
       .leftJoinAndSelect('interview.evaluations', 'evaluations')
       .leftJoinAndSelect('interview.dishonests', 'dishonests')
       .getMany();

@@ -23,6 +23,9 @@ export class ScheduleStatusCandidateDto {
   candidateId: number;
 
   @ApiProperty()
+  cUuid: string;
+
+  @ApiProperty()
   email: string;
 
   @ApiProperty({ nullable: true })
@@ -105,7 +108,7 @@ export class ScheduleStatusReportScoreDto {
   updatedAt: Date | null;
 }
 
-/** Report master linked to candidate by candidateId */
+/** Report master linked to candidate by cUuid */
 export class ScheduleStatusReportMasterDto {
   @ApiProperty()
   reportId: string;
@@ -138,7 +141,7 @@ export class ScheduleStatusReportMasterDto {
   reportScores: ScheduleStatusReportScoreDto[];
 }
 
-/** Report status for the schedule's candidate (reportMaster by candidateId, reportScores by reportId) */
+/** Report status for the schedule's candidate (reportMaster by cUuid, reportScores by reportId) */
 export class ScheduleStatusReportStatusDto {
   @ApiProperty({
     enum: ReportStatusEnum,
@@ -188,6 +191,9 @@ export class ScheduleStatusResponseDto {
   candidateId: number;
 
   @ApiProperty()
+  cUuid: string;
+
+  @ApiProperty()
   jobId: string;
 
   @ApiProperty()
@@ -202,7 +208,7 @@ export class ScheduleStatusResponseDto {
   @ApiProperty({
     type: ScheduleStatusReportStatusDto,
     description:
-      'Report status: reportMaster by candidateId, reportScores by reportId',
+      'Report status: reportMaster by cUuid, reportScores by reportId',
   })
   reportStatus: ScheduleStatusReportStatusDto;
 }

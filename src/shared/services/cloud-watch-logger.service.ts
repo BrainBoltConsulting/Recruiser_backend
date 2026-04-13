@@ -16,7 +16,7 @@ interface IMetaType {
 interface IInterviewLogDetailsType {
   interviewId: number;
   scheduleId: string;
-  candidateId: number;
+  cUuid: string;
 }
 
 @Injectable()
@@ -25,12 +25,12 @@ export class CloudWatchLoggerService {
 
   private createLogger(
     scheduleId: string,
-    candidateId: number,
+    cUuid: string,
     interviewId: number,
   ): winston.Logger {
     const logStreamName = `${
       new Date().toISOString().split('T')[0]
-    }-SId-${scheduleId}-CId-${candidateId}-IId-${interviewId}`;
+    }-SId-${scheduleId}-CUuid-${cUuid}-IId-${interviewId}`;
 
     return winston.createLogger({
       transports: [
@@ -53,7 +53,7 @@ export class CloudWatchLoggerService {
   ) {
     const logger = this.createLogger(
       logDetails.scheduleId,
-      logDetails.candidateId,
+      logDetails.cUuid,
       logDetails.interviewId,
     );
 

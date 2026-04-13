@@ -12,10 +12,6 @@ import type { Candidate } from '../entities/Candidate';
 import { UserIsNotActiveException } from '../modules/auth/exceptions/user-is-not-active.exception';
 import { ContextProvider } from '../providers/context.provider';
 
-interface AuthUserInterceptorOptions {
-  setUserSession?: boolean;
-}
-
 @Injectable()
 export class AuthUserInterceptor implements NestInterceptor {
   constructor(
@@ -38,7 +34,7 @@ export class AuthUserInterceptor implements NestInterceptor {
     );
 
     if (userSession) {
-      const userId = String(request.user.candidateId ?? request.user.id ?? '');
+      const userId = String(request.user.cUuid ?? request.user.id ?? '');
       await this.dataSource.query('SET app.current_user_id TO $1', [userId]);
     }
 

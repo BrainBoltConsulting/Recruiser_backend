@@ -38,7 +38,6 @@ import { ReportMasterRepository } from '../../repositories/ReportMasterRepositor
 import { ReportScoreRepository } from '../../repositories/ReportScoreRepository';
 import { ScheduleRepository } from '../../repositories/ScheduleRepository';
 import { ApiConfigService } from '../../shared/services/api-config.service';
-import { PollyService } from '../../shared/services/aws-polly.service';
 import { S3Service } from '../../shared/services/aws-s3.service';
 import { CognitoAuthService } from '../../shared/services/cognito-auth.service';
 import { EnhancedLoggerService } from '../../shared/services/enhanced-logger.service';
@@ -64,7 +63,6 @@ export class MeetingService {
   private readonly logger = new Logger(MeetingService.name);
 
   constructor(
-    private readonly pollyService: PollyService,
     private readonly s3Service: S3Service,
     private readonly slackNotificationService: SlackNotificationService,
     private readonly apiConfigService: ApiConfigService,
@@ -86,41 +84,28 @@ export class MeetingService {
     private readonly jobShortlistedProfilesRepository: JobShortlistedProfilesRepository,
   ) {}
 
-  async getInterviewsOfCandidate(candidateId: number) {
-    const interviewsOfCandidate =
-      await this.interviewRepository.findByCandidateIdExtended(candidateId);
-
-    return interviewsOfCandidate;
-  }
-
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
+    const cUuid = String(scheduleInterviewDto.cUuid);
+    const jUuid = String(scheduleInterviewDto.jUuid);
+
+    this.logger.log(`Scheduling interview for cUuid=${cUuid}, jUuid=${jUuid}`);
+
+    const candidateEntity = await this.candidateRepository.findByCUuid(cUuid);
     this.logger.log(
-      `Scheduling interview for candidateId=${scheduleInterviewDto.candidateId}, jUuid=${scheduleInterviewDto.jUuid}`,
+      `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (cUuid=${candidateEntity.cUuid})`,
     );
 
-    const candidateEntity = await this.candidateRepository.findById(
-      scheduleInterviewDto.candidateId,
-    );
+    const jobEntity = await this.jobsRepository.findByJUuid(jUuid);
     this.logger.log(
-      `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (ID: ${candidateEntity.candidateId})`,
-    );
-
-    const jobEntity = await this.jobsRepository.findByJUuid(
-      scheduleInterviewDto.jUuid,
-    );
-    this.logger.log(
-      `Fetched Candidate: ${candidateEntity.firstName} ${candidateEntity.lastName} (ID: ${candidateEntity.candidateId})`,
+      `Fetched Job: ${jobEntity.jobTitle ?? ''} (jUuid=${jobEntity.jUuid}, jobId=${jobEntity.jobId})`,
     );
 
     const findScheduleEntityWithTheSameCandidateAndJob =
-      await this.scheduleRepository.findByCandidateAndJUuid(
-        scheduleInterviewDto.candidateId,
-        scheduleInterviewDto.jUuid,
-      );
+      await this.scheduleRepository.findByCUuidAndJUuid(cUuid, jUuid);
 
     if (findScheduleEntityWithTheSameCandidateAndJob) {
       this.logger.warn(
-        `Attempt to schedule duplicate interview for candidateId=${scheduleInterviewDto.candidateId}, jUuid=${scheduleInterviewDto.jUuid}`,
+        `Attempt to schedule duplicate interview for cUuid=${cUuid}, jUuid=${jUuid}`,
       );
 
       throw new BadRequestException(
@@ -132,6 +117,7 @@ export class MeetingService {
       scheduledDatetime: new Date(),
       candidate: candidateEntity,
       candidateId: candidateEntity.candidateId,
+      cUuid: candidateEntity.cUuid,
       jobId: jobEntity.jobId,
       jUuid: jobEntity.jUuid,
       job: jobEntity,
@@ -140,16 +126,17 @@ export class MeetingService {
     const scheduleEntity = await this.scheduleRepository.save(newSchedule);
     this.logger.log(
       `Interview scheduled successfully | scheduleId=${scheduleEntity.scheduleId}, ` +
-        `candidateId=${scheduleEntity.candidateId}, jobId=${scheduleEntity.jobId}, jUuid=${scheduleEntity.jUuid}`,
+        `cUuid=${scheduleEntity.cUuid}, jobId=${scheduleEntity.jobId}, jUuid=${scheduleEntity.jUuid}`,
     );
 
-    await this.sendInvitionToCandidate(scheduleEntity.scheduleId);
+    const newScheduleId = String(scheduleEntity.scheduleId);
+    await this.sendInvitionToCandidate(newScheduleId);
 
     this.logger.log(
       `Invitation sent to candidate ${scheduleEntity.candidate.firstName} ${scheduleEntity.candidate.lastName}`,
     );
 
-    return this.scheduleRepository.findById(scheduleEntity.scheduleId);
+    return this.scheduleRepository.findById(newScheduleId);
   }
 
   @Transactional()
@@ -178,7 +165,7 @@ export class MeetingService {
       'Schedule entity retrieved for interview start',
       {
         scheduleId: scheduleEntity.scheduleId,
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         metadata: {
           jobId: scheduleEntity.jobId,
           jUuid: scheduleEntity.jUuid,
@@ -189,35 +176,33 @@ export class MeetingService {
     );
 
     this.enhancedLogger.startTimer(
-      `db-check-existing-interview-${scheduleEntity.candidateId}`,
+      `db-check-existing-interview-${scheduleEntity.cUuid}`,
     );
-    const interviewEntityByCandidateId =
-      await this.interviewRepository.findByCandidateIdExtended(
-        scheduleEntity.candidateId,
-      );
+    const interviewEntityByCUuid =
+      await this.interviewRepository.findByCUuidExtended(scheduleEntity.cUuid);
     this.enhancedLogger.endTimer(
-      `db-check-existing-interview-${scheduleEntity.candidateId}`,
+      `db-check-existing-interview-${scheduleEntity.cUuid}`,
       LogCategory.DATABASE,
       'Existing interview check completed',
       {
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         scheduleId,
         metadata: {
-          existingInterview: Boolean(interviewEntityByCandidateId),
+          existingInterview: Boolean(interviewEntityByCUuid),
           alreadyAttended: Boolean(scheduleEntity.attendedDatetime),
         },
       },
     );
 
-    if (interviewEntityByCandidateId || scheduleEntity.attendedDatetime) {
+    if (interviewEntityByCUuid || scheduleEntity.attendedDatetime) {
       this.enhancedLogger.error(
         LogCategory.INTERVIEW,
         '❌ Interview already started or attended - blocking duplicate attempt',
         {
-          candidateId: scheduleEntity.candidateId.toString(),
+          cUuid: String(scheduleEntity.cUuid),
           scheduleId,
           metadata: {
-            existingInterviewId: interviewEntityByCandidateId?.interviewId,
+            existingInterviewId: interviewEntityByCUuid?.interviewId,
             attendedDateTime: scheduleEntity.attendedDatetime,
             reason: 'duplicate_interview_attempt',
           },
@@ -305,13 +290,13 @@ export class MeetingService {
     }
 
     this.enhancedLogger.startTimer(
-      `db-create-interview-${scheduleEntity.candidateId}`,
+      `db-create-interview-${scheduleEntity.cUuid}`,
     );
     this.enhancedLogger.info(
       LogCategory.DATABASE,
       '💾 Creating new interview entity',
       {
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         scheduleId,
         metadata: {
           browserName: startInterviewDto.browserName,
@@ -325,17 +310,18 @@ export class MeetingService {
       this.interviewRepository.create({
         interviewDate: now,
         candidateId: scheduleEntity.candidateId,
+        cUuid: scheduleEntity.cUuid,
         browserName: startInterviewDto.browserName,
       }),
     );
 
     this.enhancedLogger.endTimer(
-      `db-create-interview-${scheduleEntity.candidateId}`,
+      `db-create-interview-${scheduleEntity.cUuid}`,
       LogCategory.DATABASE,
       'Interview entity created successfully',
       {
         interviewId: interviewEntity.interviewId.toString(),
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         scheduleId,
       },
     );
@@ -360,7 +346,7 @@ export class MeetingService {
       {
         scheduleId,
         interviewId: interviewEntity.interviewId.toString(),
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
       },
     );
 
@@ -386,7 +372,7 @@ export class MeetingService {
       'Interview start process completed',
       {
         interviewId: interviewEntity.interviewId.toString(),
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         scheduleId,
         metadata: {
           browserName: startInterviewDto.browserName,
@@ -404,7 +390,7 @@ export class MeetingService {
       )}ms`,
       {
         interviewId: interviewEntity.interviewId.toString(),
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         scheduleId,
         duration: totalDuration,
         metadata: {
@@ -485,7 +471,7 @@ export class MeetingService {
       'Schedule entity retrieved',
       {
         scheduleId: scheduleEntity.scheduleId,
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         metadata: { jobId: scheduleEntity.jobId, jUuid: scheduleEntity.jUuid },
       },
     );
@@ -495,7 +481,7 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       `👤 Processing candidate: ${candidate.firstName} ${candidate.lastName}`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           email: candidate.email,
@@ -506,25 +492,23 @@ export class MeetingService {
     );
 
     this.enhancedLogger.startTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
     );
-    const interviewEntityByCandidateId =
-      await this.interviewRepository.findByCandidateIdExtended(
-        candidate.candidateId,
-      );
+    const interviewEntityByCUuid =
+      await this.interviewRepository.findByCUuidExtended(candidate.cUuid);
     this.enhancedLogger.endTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
       LogCategory.DATABASE,
       'Interview entity retrieved',
       {
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        candidateId: candidate.candidateId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
-          browser: interviewEntityByCandidateId.browserName,
+          browser: interviewEntityByCUuid.browserName,
           evaluationsCount:
-            interviewEntityByCandidateId.evaluations?.length || 0,
-          dishonestsCount: interviewEntityByCandidateId.dishonests?.length || 0,
+          interviewEntityByCUuid.evaluations?.length || 0,
+          dishonestsCount: interviewEntityByCUuid.dishonests?.length || 0,
         },
       },
     );
@@ -537,29 +521,24 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         '⏰ Interview marked as finished early',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
         },
         'MeetingService',
       );
     }
 
-    // const interviewUploads3Response = await this.s3Service.uploadFile(file, 'Complete_Interview');
-    // const s3Uri = UtilsProvider.createS3UriFromS3BucketAndKey(interviewUploads3Response.Bucket, interviewUploads3Response.Key);
-
-    // interviewEntityUpdate.videofileS3key = s3Uri;
-
     if (Object.values(interviewEntityUpdate).length > 0) {
       this.enhancedLogger.startTimer(
-        `db-update-interview-${interviewEntityByCandidateId.interviewId}`,
+        `db-update-interview-${interviewEntityByCUuid.interviewId}`,
       );
       this.enhancedLogger.info(
         LogCategory.DATABASE,
         '💾 Updating interview entity',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             fieldsToUpdate: Object.keys(interviewEntityUpdate),
@@ -570,17 +549,17 @@ export class MeetingService {
       );
 
       await this.interviewRepository.update(
-        interviewEntityByCandidateId.interviewId,
+        { interviewId: interviewEntityByCUuid.interviewId },
         interviewEntityUpdate,
       );
 
       this.enhancedLogger.endTimer(
-        `db-update-interview-${interviewEntityByCandidateId.interviewId}`,
+        `db-update-interview-${interviewEntityByCUuid.interviewId}`,
         LogCategory.DATABASE,
         'Interview entity updated successfully',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
         },
       );
@@ -589,8 +568,8 @@ export class MeetingService {
         LogCategory.DATABASE,
         'ℹ️ No interview entity updates required',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
         },
         'MeetingService',
@@ -603,8 +582,8 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       'Critical operations completed - returning early response',
       {
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        candidateId: candidate.candidateId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
@@ -622,8 +601,8 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       '🚀 Returning early response to frontend - background processing will continue',
       {
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        candidateId: candidate.candidateId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         duration: criticalOperationsDuration,
         metadata: {
@@ -642,13 +621,13 @@ export class MeetingService {
       scheduleId,
       scheduleEntity,
       candidate,
-      interviewEntityByCandidateId,
+      interviewEntityByCUuid,
       interviewEntityUpdate,
       completionReason,
       isInterviewFinishedEarlierDto.isInterviewFinishedEarlier,
     ).catch((error) => {
       this.logger.error(
-        `Background processing failed for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
+        `Background processing failed for interview ${interviewEntityByCUuid.interviewId} (cUuid=${candidate.cUuid}): ${error.message}`,
         error.stack,
       );
     });
@@ -666,7 +645,7 @@ export class MeetingService {
     scheduleId: string,
     scheduleEntity: any,
     candidate: any,
-    interviewEntityByCandidateId: any,
+    interviewEntityByCUuid: any,
     interviewEntityUpdate: Partial<Interview>,
     completionReason: string,
     isFinishedEarly: boolean,
@@ -676,8 +655,8 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       '🔄 Starting background processing',
       {
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
-        candidateId: candidate.candidateId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           operations: ['slack_notification', 'process_api_call'],
@@ -695,19 +674,19 @@ export class MeetingService {
         this.enhancedLogger.notificationEvent(
           '📢 Preparing Slack notification payload',
           {
-            interviewId: interviewEntityByCandidateId.interviewId.toString(),
-            candidateId: candidate.candidateId.toString(),
+            interviewId: interviewEntityByCUuid.interviewId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               candidateName: `${candidate.firstName} ${candidate.lastName}`,
-              browser: interviewEntityByCandidateId.browserName,
+              browser: interviewEntityByCUuid.browserName,
               finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
               evaluationsCount:
-                interviewEntityByCandidateId.evaluations?.length || 0,
+              interviewEntityByCUuid.evaluations?.length || 0,
               dishonestsCount:
-                interviewEntityByCandidateId.dishonests?.length || 0,
+              interviewEntityByCUuid.dishonests?.length || 0,
               vocabScoresCount:
-                interviewEntityByCandidateId.vocabScores?.length || 0,
+              interviewEntityByCUuid.vocabScores?.length || 0,
             },
           },
         );
@@ -716,33 +695,33 @@ export class MeetingService {
         slackNotificationSuccess =
           await this.slackNotificationService.sendBlocks({
             blocks: this.slackNotificationService.formatInterviewSlackPayload({
-              interviewId: interviewEntityByCandidateId.interviewId.toString(),
+              interviewId: interviewEntityByCUuid.interviewId.toString(),
               scheduleId: scheduleEntity.scheduleId,
               jobId: scheduleEntity.jobId,
               jUuid: scheduleEntity.jUuid,
               candidate: {
-                id: candidate.candidateId.toString(),
+                cUuid: String(candidate.cUuid),
                 // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
                 fullName: candidate.firstName + ' ' + candidate.lastName,
               },
-              browser: interviewEntityByCandidateId.browserName,
+              browser: interviewEntityByCUuid.browserName,
               attendedTime: scheduleEntity.attendedDatetime,
               finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
               completionReason,
-              evaluations: interviewEntityByCandidateId.evaluations,
-              dishonests: interviewEntityByCandidateId.dishonests,
+              evaluations: interviewEntityByCUuid.evaluations,
+              dishonests: interviewEntityByCUuid.dishonests,
             }),
           });
 
-        const slackNotificationDuration = this.enhancedLogger.endTimer(
+        void this.enhancedLogger.endTimer(
           `slack-notification-${scheduleId}`,
           LogCategory.NOTIFICATION,
           slackNotificationSuccess
             ? 'Slack notification sent successfully'
             : 'Slack notification failed after retries',
           {
-            interviewId: interviewEntityByCandidateId.interviewId.toString(),
-            candidateId: candidate.candidateId.toString(),
+            interviewId: interviewEntityByCUuid.interviewId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               success: slackNotificationSuccess,
@@ -755,8 +734,8 @@ export class MeetingService {
             LogCategory.NOTIFICATION,
             '⚠️ Slack notification failed after all retry attempts',
             {
-              interviewId: interviewEntityByCandidateId.interviewId.toString(),
-              candidateId: candidate.candidateId.toString(),
+              interviewId: interviewEntityByCUuid.interviewId.toString(),
+              cUuid: String(candidate.cUuid),
               scheduleId,
               metadata: {
                 candidateName: `${candidate.firstName} ${candidate.lastName}`,
@@ -772,8 +751,8 @@ export class MeetingService {
           LogCategory.NOTIFICATION,
           '❌ Unexpected error during Slack notification',
           {
-            interviewId: interviewEntityByCandidateId.interviewId.toString(),
-            candidateId: candidate.candidateId.toString(),
+            interviewId: interviewEntityByCUuid.interviewId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               error: error.message,
@@ -783,24 +762,24 @@ export class MeetingService {
           'MeetingService',
         );
 
-      this.logger.error(
-          `Unexpected error sending Slack notification for interview ${interviewEntityByCandidateId.interviewId}: ${error.message}`,
+        this.logger.error(
+          `Unexpected error sending Slack notification for interview ${interviewEntityByCUuid.interviewId} (cUuid=${candidate.cUuid}): ${error.message}`,
           error.stack,
         );
 
-      // Continue with other background operations even if Slack fails
+        // Continue with other background operations even if Slack fails
         slackNotificationSuccess = false;
       }
 
       // Process API call
       this.enhancedLogger.startTimer(
-        `process-api-call-${candidate.candidateId}`,
+        `process-api-call-${candidate.cUuid}`,
       );
       this.enhancedLogger.info(
         LogCategory.API,
         '🔄 Calling process API endpoint',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             endpoint: this.apiConfigService.processApiUrl,
@@ -816,7 +795,7 @@ export class MeetingService {
 
         this.logger.debug('Process API call details:', {
           url: this.apiConfigService.processApiUrl,
-          candidateId: candidate.candidateId,
+          cUuid: String(candidate.cUuid),
           idTokenLength: cognitoIdToken?.length || 0,
           accessTokenLength: cognitoAccessToken?.length || 0,
           idTokenPrefix: cognitoIdToken?.slice(0, 20) + '...',
@@ -824,28 +803,30 @@ export class MeetingService {
         });
 
         // Use ID token as it works in the AWS Authorizer test
+        const processApiHeaders: Record<string, string> = {
+          Authorization: `Bearer ${cognitoIdToken}`,
+        };
+        processApiHeaders['Content-Type'] = 'application/json';
+
+        const candidateUuid = String(candidate.cUuid);
         const processApiResponse = await axios.post(
           this.apiConfigService.processApiUrl,
           {
-            candidateId: candidate.candidateId,
+            cUuid: candidateUuid,
+            c_uuid: candidateUuid,
           },
           {
             timeout: 30_000, // 30 seconds timeout
-            headers: {
-              // eslint-disable-next-line @typescript-eslint/naming-convention
-              'Content-Type': 'application/json',
-              // eslint-disable-next-line @typescript-eslint/naming-convention
-              Authorization: `Bearer ${cognitoIdToken}`,
-            },
+            headers: processApiHeaders,
           },
         );
 
         this.enhancedLogger.endTimer(
-          `process-api-call-${candidate.candidateId}`,
+          `process-api-call-${candidate.cUuid}`,
           LogCategory.API,
           'Process API call completed successfully',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               statusCode: processApiResponse.status,
@@ -858,7 +839,7 @@ export class MeetingService {
           LogCategory.API,
           '✅ Process API call successful',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               statusCode: processApiResponse.status,
@@ -870,6 +851,7 @@ export class MeetingService {
         // Enhanced error logging for Process API debugging
         this.logger.error('Process API call failed with detailed error:', {
           message: error.message,
+          cUuid: String(candidate.cUuid),
           status: error.response?.status,
           statusText: error.response?.statusText,
           headers: error.response?.headers,
@@ -887,13 +869,13 @@ export class MeetingService {
         );
 
         this.enhancedLogger.endTimer(
-          `process-api-call-${candidate.candidateId}`,
+          `process-api-call-${candidate.cUuid}`,
           LogCategory.API,
           isCognitoError
             ? 'Process API call failed - Cognito authentication error'
             : 'Process API call failed',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               error: error.message,
@@ -908,7 +890,7 @@ export class MeetingService {
           LogCategory.API,
           '❌ Process API call failed',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
             metadata: {
               error: error.message,
@@ -920,7 +902,7 @@ export class MeetingService {
 
         // Log the error but don't throw it to avoid breaking the background processing
         this.logger.error(
-          `Failed to call process API for candidate ${candidate.candidateId}: ${error.message}`,
+          `Failed to call process API (cUuid=${candidate.cUuid}): ${error.message}`,
           error.stack,
         );
       }
@@ -931,8 +913,8 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         'Background processing completed',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             candidateName: `${candidate.firstName} ${candidate.lastName}`,
@@ -946,7 +928,7 @@ export class MeetingService {
       );
 
       // Final summary with completion type
-      let finalMessage;
+      let finalMessage: string;
 
       if (completionReason === CompletionReasonEnum.TAB_CLOSE) {
         finalMessage = `🚨 Interview completed due to TAB CLOSE! Background processing time: ${totalBackgroundDuration.toFixed(
@@ -966,8 +948,8 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         finalMessage,
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           duration: totalBackgroundDuration,
           metadata: {
@@ -986,8 +968,8 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         'Background processing failed',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             error: error.message,
@@ -999,8 +981,8 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         '❌ Background processing failed',
         {
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
-          candidateId: candidate.candidateId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             error: error.message,
@@ -1047,7 +1029,7 @@ export class MeetingService {
       'Schedule entity retrieved for recording save',
       {
         scheduleId: scheduleEntity.scheduleId,
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         metadata: {
           jobId: scheduleEntity.jobId,
           jUuid: scheduleEntity.jUuid,
@@ -1060,7 +1042,7 @@ export class MeetingService {
       LogCategory.UPLOAD,
       `📤 Processing recording for candidate: ${candidate.firstName} ${candidate.lastName}`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1071,14 +1053,14 @@ export class MeetingService {
     );
 
     const fileName = `CId-${
-      candidate.candidateId
+      candidate.cUuid
     }-SId-${scheduleId}-QId-${questionId}-${Date.now()}`;
 
     this.enhancedLogger.info(
       LogCategory.UPLOAD,
       '📝 Generated structured filename for S3 upload',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1093,7 +1075,7 @@ export class MeetingService {
     this.enhancedLogger.startTimer(`s3-upload-${scheduleId}-${questionId}`);
     this.enhancedLogger.uploadEvent('Uploading video file to S3', {
       scheduleId,
-      candidateId: candidate.candidateId.toString(),
+      cUuid: String(candidate.cUuid),
       metadata: {
         questionId,
         fileName,
@@ -1113,7 +1095,7 @@ export class MeetingService {
       LogCategory.UPLOAD,
       'Video file uploaded to S3 successfully',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1134,7 +1116,7 @@ export class MeetingService {
       LogCategory.UPLOAD,
       '🔗 S3 URI generated for video file',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1145,43 +1127,43 @@ export class MeetingService {
     );
 
     this.enhancedLogger.startTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
     );
     this.enhancedLogger.debug(
       LogCategory.DATABASE,
       '🔍 Fetching interview entity for evaluation creation',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: { questionId },
       },
       'MeetingService',
     );
 
-    const interviewEntityByCandidateId =
-      await this.interviewRepository.findByCandidateId(candidate.candidateId); // tmp solution
+    const interviewEntityByCUuid =
+      await this.interviewRepository.findByCUuid(candidate.cUuid); // tmp solution
 
     this.enhancedLogger.endTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
       LogCategory.DATABASE,
       'Interview entity retrieved',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
-          interviewFound: Boolean(interviewEntityByCandidateId),
+          interviewFound: Boolean(interviewEntityByCUuid),
         },
       },
     );
 
-    if (!interviewEntityByCandidateId) {
+    if (!interviewEntityByCUuid) {
       this.enhancedLogger.error(
         LogCategory.DATABASE,
         '❌ Interview entity not found for candidate',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             questionId,
@@ -1198,8 +1180,8 @@ export class MeetingService {
 
     // Use database transaction with advisory lock to prevent race conditions
     const lockId =
-      `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(
-        /[^a-zA-Z0-9_]/g,
+      `evaluation_${questionId}_${interviewEntityByCUuid?.interviewId}`.replace(
+        /\W/g,
         '_',
       );
 
@@ -1207,9 +1189,9 @@ export class MeetingService {
       LogCategory.DATABASE,
       '🔒 Using database advisory lock to prevent race conditions',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
           lockId,
@@ -1236,7 +1218,7 @@ export class MeetingService {
       evaluationEntity = await queryRunner.manager.findOne('Evaluation', {
         where: {
           questionId,
-          interviewId: interviewEntityByCandidateId?.interviewId,
+          interviewId: interviewEntityByCUuid?.interviewId,
         },
       });
 
@@ -1246,9 +1228,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           '🔄 Evaluation entity found, updating with camera recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               evaluationId: evaluationEntity.evaluationId,
               questionId,
@@ -1269,9 +1251,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           'Evaluation entity updated successfully with camera recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               evaluationId: evaluationEntity.evaluationId,
               questionId,
@@ -1286,9 +1268,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           '💾 Creating new evaluation entity for camera recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               questionId,
               videoS3Uri: s3Uri.slice(0, 50) + '...',
@@ -1299,7 +1281,7 @@ export class MeetingService {
 
         evaluationEntity = await queryRunner.manager.save('Evaluation', {
           questionId,
-          interviewId: interviewEntityByCandidateId?.interviewId,
+          interviewId: interviewEntityByCUuid?.interviewId,
           videofileS3key: s3Uri,
         });
 
@@ -1308,9 +1290,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           'Evaluation entity created successfully with camera recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               evaluationId: evaluationEntity.evaluationId,
               questionId,
@@ -1329,9 +1311,9 @@ export class MeetingService {
         LogCategory.DATABASE,
         '❌ Database operation failed for camera recording',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+          interviewId: interviewEntityByCUuid?.interviewId?.toString(),
           metadata: {
             questionId,
             error: error.message,
@@ -1350,9 +1332,9 @@ export class MeetingService {
       LogCategory.UPLOAD,
       'Recording save process completed',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
           evaluationId: evaluationEntity.evaluationId,
@@ -1368,9 +1350,9 @@ export class MeetingService {
         2,
       )}ms`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         duration: totalDuration,
         metadata: {
           questionId,
@@ -1419,7 +1401,7 @@ export class MeetingService {
       'Schedule entity retrieved for screen recording save',
       {
         scheduleId: scheduleEntity.scheduleId,
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         metadata: {
           jobId: scheduleEntity.jobId,
           jUuid: scheduleEntity.jUuid,
@@ -1432,7 +1414,7 @@ export class MeetingService {
       LogCategory.UPLOAD,
       `📤 Processing screen recording for candidate: ${candidate.firstName} ${candidate.lastName}`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1443,14 +1425,14 @@ export class MeetingService {
     );
 
     const fileName = `CId-${
-      candidate.candidateId
+      candidate.cUuid
     }-SId-${scheduleId}-QId-${questionId}-${Date.now()}-screen`;
 
     this.enhancedLogger.info(
       LogCategory.UPLOAD,
       '📝 Generated structured filename for screen recording S3 upload',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1467,7 +1449,7 @@ export class MeetingService {
     );
     this.enhancedLogger.uploadEvent('Uploading screen recording to S3', {
       scheduleId,
-      candidateId: candidate.candidateId.toString(),
+      cUuid: String(candidate.cUuid),
       metadata: {
         questionId,
         fileName,
@@ -1487,7 +1469,7 @@ export class MeetingService {
       LogCategory.UPLOAD,
       'Screen recording uploaded to S3 successfully',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1508,7 +1490,7 @@ export class MeetingService {
       LogCategory.UPLOAD,
       '🔗 S3 URI generated for screen recording',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1519,43 +1501,43 @@ export class MeetingService {
     );
 
     this.enhancedLogger.startTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
     );
     this.enhancedLogger.debug(
       LogCategory.DATABASE,
       '🔍 Fetching interview entity for evaluation update',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: { questionId },
       },
       'MeetingService',
     );
 
-    const interviewEntityByCandidateId =
-      await this.interviewRepository.findByCandidateId(candidate.candidateId);
+    const interviewEntityByCUuid =
+      await this.interviewRepository.findByCUuid(candidate.cUuid);
 
     this.enhancedLogger.endTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
       LogCategory.DATABASE,
       'Interview entity retrieved',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
-          interviewFound: Boolean(interviewEntityByCandidateId),
+          interviewFound: Boolean(interviewEntityByCUuid),
         },
       },
     );
 
-    if (!interviewEntityByCandidateId) {
+    if (!interviewEntityByCUuid) {
       this.enhancedLogger.error(
         LogCategory.DATABASE,
         '❌ Interview entity not found for candidate',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             questionId,
@@ -1572,8 +1554,8 @@ export class MeetingService {
 
     // Use database transaction with advisory lock to prevent race conditions
     const lockId =
-      `evaluation_${questionId}_${interviewEntityByCandidateId?.interviewId}`.replace(
-        /[^a-zA-Z0-9_]/g,
+      `evaluation_${questionId}_${interviewEntityByCUuid?.interviewId}`.replace(
+        /\W/g,
         '_',
       );
 
@@ -1581,9 +1563,9 @@ export class MeetingService {
       LogCategory.DATABASE,
       '🔒 Using database advisory lock to prevent race conditions',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
           lockId,
@@ -1610,7 +1592,7 @@ export class MeetingService {
       evaluationEntity = await queryRunner.manager.findOne('Evaluation', {
         where: {
           questionId,
-          interviewId: interviewEntityByCandidateId?.interviewId,
+          interviewId: interviewEntityByCUuid?.interviewId,
         },
       });
 
@@ -1620,9 +1602,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           '🔄 Evaluation entity found, updating with screen recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               evaluationId: evaluationEntity.evaluationId,
               questionId,
@@ -1643,9 +1625,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           'Evaluation entity updated successfully with screen recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               evaluationId: evaluationEntity.evaluationId,
               questionId,
@@ -1660,9 +1642,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           '💾 Creating new evaluation entity for screen recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               questionId,
               screenVideoS3Uri: s3Uri.slice(0, 50) + '...',
@@ -1673,7 +1655,7 @@ export class MeetingService {
 
         evaluationEntity = await queryRunner.manager.save('Evaluation', {
           questionId,
-          interviewId: interviewEntityByCandidateId?.interviewId,
+          interviewId: interviewEntityByCUuid?.interviewId,
           videofilename: s3Uri,
         });
 
@@ -1682,9 +1664,9 @@ export class MeetingService {
           LogCategory.DATABASE,
           'Evaluation entity created successfully with screen recording',
           {
-            candidateId: candidate.candidateId.toString(),
+            cUuid: String(candidate.cUuid),
             scheduleId,
-            interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+            interviewId: interviewEntityByCUuid?.interviewId?.toString(),
             metadata: {
               evaluationId: evaluationEntity.evaluationId,
               questionId,
@@ -1703,9 +1685,9 @@ export class MeetingService {
         LogCategory.DATABASE,
         '❌ Database operation failed for screen recording',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+          interviewId: interviewEntityByCUuid?.interviewId?.toString(),
           metadata: {
             questionId,
             error: error.message,
@@ -1724,9 +1706,9 @@ export class MeetingService {
       LogCategory.UPLOAD,
       'Screen recording save process completed',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
           evaluationId: evaluationEntity.evaluationId,
@@ -1742,9 +1724,9 @@ export class MeetingService {
         2,
       )}ms`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         duration: totalDuration,
         metadata: {
           questionId,
@@ -1792,7 +1774,7 @@ export class MeetingService {
       'Schedule entity retrieved for cheat logging',
       {
         scheduleId: scheduleEntity.scheduleId,
-        candidateId: scheduleEntity.candidateId.toString(),
+        cUuid: String(scheduleEntity.cUuid),
         metadata: {
           jobId: scheduleEntity.jobId,
           jUuid: scheduleEntity.jUuid,
@@ -1806,7 +1788,7 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       `⚠️ Cheat detected for candidate: ${candidate.firstName} ${candidate.lastName}`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
         metadata: {
           questionId,
@@ -1819,31 +1801,31 @@ export class MeetingService {
     );
 
     this.enhancedLogger.startTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
     );
-    const interviewEntityByCandidateId =
-      await this.interviewRepository.findByCandidateId(candidate.candidateId); // tmp solution
+    const interviewEntityByCUuid =
+      await this.interviewRepository.findByCUuid(candidate.cUuid); // tmp solution
     this.enhancedLogger.endTimer(
-      `db-fetch-interview-${candidate.candidateId}`,
+      `db-fetch-interview-${candidate.cUuid}`,
       LogCategory.DATABASE,
       'Interview entity retrieved for cheat logging',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId?.interviewId?.toString(),
+        interviewId: interviewEntityByCUuid?.interviewId?.toString(),
         metadata: {
           questionId,
-          interviewFound: Boolean(interviewEntityByCandidateId),
+          interviewFound: Boolean(interviewEntityByCUuid),
         },
       },
     );
 
-    if (!interviewEntityByCandidateId) {
+    if (!interviewEntityByCUuid) {
       this.enhancedLogger.error(
         LogCategory.DATABASE,
         '❌ Interview entity not found - cannot log cheat detection',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
           metadata: {
             questionId,
@@ -1858,15 +1840,15 @@ export class MeetingService {
     }
 
     this.enhancedLogger.startTimer(
-      `db-fetch-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
+      `db-fetch-dishonest-${interviewEntityByCUuid.interviewId}-${questionId}`,
     );
     this.enhancedLogger.debug(
       LogCategory.DATABASE,
       '🔍 Checking for existing dishonest behavior records',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
         metadata: {
           questionId,
           lookupType: 'existing_cheat_record',
@@ -1877,18 +1859,18 @@ export class MeetingService {
 
     const findDishonestEntityByQUestionAndInterviewId =
       await this.dishonestRepository.findByInterviewIdAndQuestionId(
-        interviewEntityByCandidateId.interviewId,
+        Number(interviewEntityByCUuid.interviewId),
         questionId,
       );
 
     this.enhancedLogger.endTimer(
-      `db-fetch-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
+      `db-fetch-dishonest-${interviewEntityByCUuid.interviewId}-${questionId}`,
       LogCategory.DATABASE,
       'Dishonest entity lookup completed',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
         metadata: {
           questionId,
           existingRecord: Boolean(findDishonestEntityByQUestionAndInterviewId),
@@ -1916,9 +1898,9 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       `📊 Cheat counter incremented: ${switchCount} tab switches detected`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
         metadata: {
           questionId,
           previousCount:
@@ -1932,7 +1914,7 @@ export class MeetingService {
     );
 
     this.enhancedLogger.startTimer(
-      `db-save-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
+      `db-save-dishonest-${interviewEntityByCUuid.interviewId}-${questionId}`,
     );
 
     const isNewRecord = !findDishonestEntityByQUestionAndInterviewId;
@@ -1942,9 +1924,9 @@ export class MeetingService {
         LogCategory.DATABASE,
         '💾 Creating new dishonest behavior record',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
           metadata: {
             questionId,
             switchCount,
@@ -1958,9 +1940,9 @@ export class MeetingService {
         LogCategory.DATABASE,
         '🔄 Updating existing dishonest behavior record',
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
           metadata: {
             questionId,
             oldSwitchCount:
@@ -1976,8 +1958,8 @@ export class MeetingService {
     await (!findDishonestEntityByQUestionAndInterviewId
       ? this.dishonestRepository.save(
           this.dishonestRepository.create({
-            interview: interviewEntityByCandidateId,
-            interviewId: interviewEntityByCandidateId.interviewId,
+            interview: interviewEntityByCUuid,
+            interviewId: interviewEntityByCUuid.interviewId,
             questionId,
             switchCount,
           }),
@@ -1988,15 +1970,15 @@ export class MeetingService {
         }));
 
     this.enhancedLogger.endTimer(
-      `db-save-dishonest-${interviewEntityByCandidateId.interviewId}-${questionId}`,
+      `db-save-dishonest-${interviewEntityByCUuid.interviewId}-${questionId}`,
       LogCategory.DATABASE,
       `Dishonest behavior record ${
         isNewRecord ? 'created' : 'updated'
       } successfully`,
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
         metadata: {
           questionId,
           finalSwitchCount: switchCount,
@@ -2010,9 +1992,9 @@ export class MeetingService {
       LogCategory.INTERVIEW,
       'Cheat detection logging completed',
       {
-        candidateId: candidate.candidateId.toString(),
+        cUuid: String(candidate.cUuid),
         scheduleId,
-        interviewId: interviewEntityByCandidateId.interviewId.toString(),
+        interviewId: interviewEntityByCUuid.interviewId.toString(),
         metadata: {
           questionId,
           switchCount,
@@ -2027,9 +2009,9 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         `🚨 HIGH SEVERITY ALERT: Candidate has ${switchCount} tab switches - possible cheating`,
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
           duration: totalDuration,
           metadata: {
             questionId,
@@ -2046,9 +2028,9 @@ export class MeetingService {
         LogCategory.INTERVIEW,
         `⚠️ MEDIUM SEVERITY: ${switchCount} tab switches detected - monitor closely`,
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
           duration: totalDuration,
           metadata: {
             questionId,
@@ -2066,9 +2048,9 @@ export class MeetingService {
           2,
         )}ms`,
         {
-          candidateId: candidate.candidateId.toString(),
+          cUuid: String(candidate.cUuid),
           scheduleId,
-          interviewId: interviewEntityByCandidateId.interviewId.toString(),
+          interviewId: interviewEntityByCUuid.interviewId.toString(),
           duration: totalDuration,
           metadata: {
             questionId,
@@ -2238,8 +2220,8 @@ export class MeetingService {
     let status: ScheduleStatusEnum = ScheduleStatusEnum.SCHEDULED;
 
     if (schedule.attendedDatetime) {
-      const interview = await this.interviewRepository.findByCandidateId(
-        schedule.candidateId,
+      const interview = await this.interviewRepository.findByCUuid(
+        String(schedule.cUuid),
       );
       status = interview
         ? ScheduleStatusEnum.COMPLETED
@@ -2250,20 +2232,22 @@ export class MeetingService {
     const manager = job?.manager;
     const candidate = schedule.candidate;
 
-    // Report status: reportMaster by candidateId, reportScores by reportId
+    // Report status: reportMaster by cUuid, reportScores by reportId
 
-    const reportMaster = await this.reportMasterRepository.findByCandidateId(
-      schedule.candidateId,
+    const reportMaster = await this.reportMasterRepository.findByCUuid(
+      String(schedule.cUuid),
     );
     let reportStatus: ScheduleStatusResponseDto['reportStatus'];
 
     // Report status: null when interview not done; COMPLETED/IN_PROGRESS when interview is COMPLETED
-    const reportStatusValue: ReportStatusEnum | null =
-      status !== ScheduleStatusEnum.COMPLETED
-        ? null
-        : (reportMaster
-          ? ReportStatusEnum.COMPLETED
-          : ReportStatusEnum.IN_PROGRESS);
+
+    let reportStatusValue: ReportStatusEnum | null = null;
+
+    if (status === ScheduleStatusEnum.COMPLETED) {
+      reportStatusValue = reportMaster
+        ? ReportStatusEnum.COMPLETED
+        : ReportStatusEnum.IN_PROGRESS;
+    }
 
     if (reportMaster) {
       const reportScores = await this.reportScoreRepository.findByReportId(
@@ -2271,7 +2255,7 @@ export class MeetingService {
       );
       const reportUrl = this.s3Service.generatePresignedUrlForEmail(
         reportMaster.reportS3key,
-        60 * 60 * 24,
+        60 * 60 * 24 * 7,
       );
       reportStatus = {
         status: reportStatusValue,
@@ -2309,10 +2293,12 @@ export class MeetingService {
       createdOn: schedule.createdOn,
       updatedAt: schedule.updatedAt,
       candidateId: schedule.candidateId,
+      cUuid: schedule.cUuid,
       jobId: schedule.jobId,
       jUuid: schedule.jUuid,
       candidate: {
         candidateId: candidate.candidateId,
+        cUuid: candidate.cUuid,
         email: candidate.email,
         firstName: candidate.firstName ?? null,
         lastName: candidate.lastName ?? null,
@@ -2349,34 +2335,6 @@ export class MeetingService {
     const res = await this.s3Service.createMultipartUpload(s3Key);
 
     return { uploadId: res.UploadId, s3Key };
-  }
-
-  async uploadMultipartChunk(
-    scheduleId: string,
-    s3Key: string,
-    chunk: Express.Multer.File,
-    uploadId: string,
-    partNumber: number,
-  ) {
-    const res = await this.s3Service.uploadPart(
-      s3Key,
-      uploadId,
-      partNumber,
-      chunk.buffer,
-    );
-
-    return { ETag: res.ETag, PartNumber: partNumber };
-  }
-
-  async completeMultipartUpload(
-    scheduleId: string,
-    s3Key: string,
-    uploadId: string,
-    parts: Array<{ ETag: string; PartNumber: number }>,
-  ) {
-    await this.s3Service.completeMultipartUpload(s3Key, uploadId, parts);
-
-    return { success: true, s3Key };
   }
 
   generateNewMeetingLink() {

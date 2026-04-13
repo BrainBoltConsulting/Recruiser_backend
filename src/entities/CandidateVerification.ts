@@ -36,8 +36,11 @@ export class CandidateVerification {
   @PrimaryGeneratedColumn({ type: 'bigint', name: 'verification_id' })
   verificationId: string;
 
+  @Column('uuid', { name: 'c_uuid' })
+  cUuid: string;
+
   @ManyToOne(() => Candidate, (candidate) => candidate.candidateVerifications)
-  @JoinColumn([{ name: 'candidate_id', referencedColumnName: 'candidateId' }])
+  @JoinColumn([{ name: 'c_uuid', referencedColumnName: 'cUuid' }])
   candidate: Candidate;
 
   @ManyToOne(() => Manager, (manager) => manager.candidateVerifications)
