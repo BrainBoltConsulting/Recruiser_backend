@@ -1,11 +1,103 @@
 import { Injectable } from '@nestjs/common';
+import { Transactional } from 'typeorm-transactional';
 
 import type { Questions } from '../../entities/Questions';
+import { UtilsProvider } from '../../providers/utils.provider';
+import { AnswersRepository } from '../../repositories/AnswersRepository';
 import { QuestionsRepository } from '../../repositories/QuestionsRepository';
+import { PollyService } from '../../shared/services/aws-polly.service';
+import { S3Service } from '../../shared/services/aws-s3.service';
+import { SkillService } from '../skill/skill.service';
+import { CreateQuestionDto } from './dtos/create-question.dto';
+import type { GetQuestionsDto } from './dtos/get-questions.dto';
 
 @Injectable()
 export class QuestionService {
-  constructor(private readonly questionsRepository: QuestionsRepository) {}
+  constructor(
+    private readonly s3Service: S3Service,
+    private readonly pollyService: PollyService,
+    private readonly skillService: SkillService,
+    private readonly questionsRepository: QuestionsRepository,
+    private readonly answersRepository: AnswersRepository,
+  ) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async getAllQuestions(getQuestionsDto: GetQuestionsDto) {
+    return (await this.questionsRepository.getAllSorted()).toDtos();
+  }
+
+  async getSingleQuestionsVoice(id: string) {
+    const questionEntity = await this.questionsRepository.findById(id);
+
+    return this.readQuestionByPolly(questionEntity.questionText ?? '');
+  }
+
+  @Transactional()
+  async createNewQuestion(
+    createQuestionDto: CreateQuestionDto,
+    files: { videoFile?: Express.Multer.File[] } = {},
+  ): Promise<Questions> {
+    const primarySkillEntity = await this.skillService.getSkillById(
+      createQuestionDto.primarySkillId,
+    );
+
+    const questionEntityToSave = await this.questionsRepository.save(
+      this.questionsRepository.create({
+        difficultyLevel: createQuestionDto.difficulty,
+        questionLevel: null, // temporary solution  TODO: add level
+        timeToAnswer: createQuestionDto.timeToAnswer,
+        primarySkillId: primarySkillEntity.skillId,
+        questionText: createQuestionDto.question,
+        subTech: 'Core',
+      }),
+    );
+
+    if (files.videoFile && files.videoFile.length > 0) {
+      const videoFile = files.videoFile[0];
+      const responseFromS3 = await this.s3Service.uploadFile(
+        videoFile,
+        'VideoAvatarQuestions',
+        questionEntityToSave.questionId +
+          videoFile.mimetype.replace('video/', '.'),
+      );
+
+      questionEntityToSave.questionVideoS3Link =
+        UtilsProvider.createS3UriFromS3BucketAndKey(
+          responseFromS3.Bucket,
+          responseFromS3.Key,
+        );
+    }
+
+    await this.answersRepository.save(
+      this.answersRepository.create({
+        answer: createQuestionDto.answer,
+        question: questionEntityToSave,
+        questionId: questionEntityToSave.questionId,
+      }),
+    );
+
+    return this.questionsRepository.save(questionEntityToSave);
+  }
+
+  async deleteQuestionById(id: string): Promise<void> {
+    await this.answersRepository.deleteByQuestionId(id);
+
+    await this.questionsRepository.delete({ questionId: id });
+  }
+
+  async readQuestionByPolly(question: string) {
+    return this.pollyService.generateSpeechStream(question);
+  }
+
+  async getQuestionsBySkill(skillId: number, questionsTakeNumber: string) {
+    const questionEntities =
+      await this.questionsRepository.findByPrimarySkillId(
+        skillId,
+        questionsTakeNumber,
+      );
+
+    return questionEntities;
+  }
 
   async getQuestionsByDifficultyLevelAndSkills(
     skills: Array<{ skillId: number; count: number }>,
@@ -44,9 +136,9 @@ export class QuestionService {
       .filter((question) => question.questionLevel)
       .map((question) => question.questionLevel.toString())
       .filter(
-        (id, i, arr) =>
-          !allSelected.some((question) => question.questionId === id) &&
-          arr.indexOf(id) === i,
+        (qid, i, arr) =>
+          !allSelected.some((question) => question.questionId === qid) &&
+          arr.indexOf(qid) === i,
       );
 
     const parentQuestions =
