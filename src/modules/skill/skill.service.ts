@@ -1,7 +1,13 @@
-import { CandidateRepository } from './../../repositories/CandidateRepository';
-import { CandidateSkillsRepository } from './../../repositories/CandidateSkillsRepository';
-import { SkillsRepository } from './../../repositories/SkillsRepository';
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+
+import type { Skills } from '../../entities/Skills';
+import { CandidateRepository } from '../../repositories/CandidateRepository';
+import { CandidateSkillsRepository } from '../../repositories/CandidateSkillsRepository';
+import { SkillsRepository } from '../../repositories/SkillsRepository';
 
 @Injectable()
 export class SkillService {
@@ -10,6 +16,10 @@ export class SkillService {
     private readonly candidateSkillsRepository: CandidateSkillsRepository,
     private readonly candidateRepository: CandidateRepository,
   ) {}
+
+  async getSkillById(id: number): Promise<Skills> {
+    return this.skillRepository.findById(id);
+  }
 
   async createSkillForCadidate(skillId: number, cUuid: string) {
     const skillEntity = await this.skillRepository.findById(skillId);
@@ -37,5 +47,4 @@ export class SkillService {
 
     return candidateSkillEntity;
   }
-
 }
