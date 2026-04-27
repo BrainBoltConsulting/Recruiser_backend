@@ -692,26 +692,38 @@ export class MeetingService {
         );
 
         this.enhancedLogger.startTimer(`slack-notification-${scheduleId}`);
-        slackNotificationSuccess =
-          await this.slackNotificationService.sendBlocks({
-            blocks: this.slackNotificationService.formatInterviewSlackPayload({
-              interviewId: interviewEntityByCUuid.interviewId.toString(),
-              scheduleId: scheduleEntity.scheduleId,
-              jobId: scheduleEntity.jobId,
-              jUuid: scheduleEntity.jUuid,
-              candidate: {
-                cUuid: String(candidate.cUuid),
-                // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-                fullName: candidate.firstName + ' ' + candidate.lastName,
-              },
-              browser: interviewEntityByCUuid.browserName,
-              attendedTime: scheduleEntity.attendedDatetime,
-              finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
-              completionReason,
-              evaluations: interviewEntityByCUuid.evaluations,
-              dishonests: interviewEntityByCUuid.dishonests,
-            }),
+        const slackChunks =
+          this.slackNotificationService.formatInterviewSlackMessageChunks({
+            interviewId: interviewEntityByCUuid.interviewId.toString(),
+            scheduleId: scheduleEntity.scheduleId,
+            jobId: scheduleEntity.jobId,
+            jUuid: scheduleEntity.jUuid,
+            candidate: {
+              cUuid: String(candidate.cUuid),
+              // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
+              fullName: candidate.firstName + ' ' + candidate.lastName,
+            },
+            browser: interviewEntityByCUuid.browserName,
+            attendedTime: scheduleEntity.attendedDatetime,
+            finishedEarly: interviewEntityUpdate.isInterviewFinishedEarlier,
+            completionReason,
+            evaluations: interviewEntityByCUuid.evaluations,
+            dishonests: interviewEntityByCUuid.dishonests,
           });
+
+        for (const blocks of slackChunks) {
+          const isChunkSent = await this.slackNotificationService.sendBlocks({
+            blocks,
+          });
+
+          if (!isChunkSent) {
+            slackNotificationSuccess = false;
+
+            break;
+          }
+
+          slackNotificationSuccess = true;
+        }
 
         void this.enhancedLogger.endTimer(
           `slack-notification-${scheduleId}`,
