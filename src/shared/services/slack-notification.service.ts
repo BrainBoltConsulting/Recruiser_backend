@@ -152,7 +152,11 @@ export class SlackNotificationService {
   }
 
 
-  formatInterviewSlackPayload(interview: {
+  /**
+   * Builds one or more Slack block payloads (max 50 blocks each — Slack API limit).
+   * Evaluations are emitted as tight [section, context] pairs so chunking never splits a question row.
+   */
+  formatInterviewSlackMessageChunks(interview: {
     interviewId: string;
     scheduleId: string;
     jobId: string;
@@ -162,9 +166,9 @@ export class SlackNotificationService {
     attendedTime: Date;
     finishedEarly: boolean;
     completionReason?: string;
-    evaluations: { questionId: string; videofileS3key: string, videofilename: string }[];
-    dishonests: { switchCount: number, questionId: string }[];
-  }) {
+    evaluations: { questionId: string; videofileS3key: string; videofilename: string }[];
+    dishonests: { switchCount: number; questionId: string }[];
+  }): any[][] {
     // Helper to safely format values and truncate if needed
     const safeText = (value: any, maxLength: number = 3000): string => {
       if (value === null || value === undefined) return 'N/A';
@@ -216,20 +220,19 @@ export class SlackNotificationService {
     };
 
     const style = getCompletionStyle(interview.completionReason);
-  
-    const blocks: any[] = [
+
+    const preamble: any[] = [
       {
         type: 'section',
         text: {
-            type: 'mrkdwn',
-            text: safeText(`*${style.emoji} ${style.title}*`),
+          type: 'mrkdwn',
+          text: safeText(`*${style.emoji} ${style.title}*`),
         },
       },
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          // Slack header text limit is 150 characters
           text: safeText(`📋 Interview Summary: ${interview.candidate?.fullName || 'Unknown'}`, 150),
         },
       },
@@ -249,86 +252,113 @@ export class SlackNotificationService {
         ],
       },
     ];
-  
+
+    const evaluationPairs: any[][] = [];
     if (interview.evaluations?.length) {
-      blocks.push({
+      preamble.push({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: safeText(`*🎥 Evaluated Questions & Recordings (${interview.evaluations?.length}):*`),
+          text: safeText(`*🎥 Evaluated Questions & Recordings (${interview.evaluations.length}):*`),
         },
       });
-  
+
       interview.evaluations.forEach((q, i) => {
-        const cameraRecording = q.videofileS3key 
+        const cameraRecording = q.videofileS3key
           ? UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofileS3key)
           : 'N/A';
         const screenRecording = q.videofilename
           ? UtilsProvider.replaceS3UriWithS3Key(this.configService.bucketName, q.videofilename)
           : 'N/A';
-        
-        // Question header
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: safeText(`*Question ${i + 1}* (ID: ${q.questionId || 'N/A'})`),
+
+        evaluationPairs.push([
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: safeText(`*Question ${i + 1}* (ID: ${q.questionId || 'N/A'})`),
+            },
           },
-        });
-        
-        // Camera and Screen recordings
-        blocks.push({
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: safeText(`📹 *Camera:* \`${cameraRecording}\``),
-            },
-          ],
-        });
-        
-        blocks.push({
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: safeText(`🖥️ *Screen:* \`${screenRecording}\``),
-            },
-          ],
-        });
-        
-        // Add divider between questions (except after the last one)
-        if (i < interview.evaluations.length - 1) {
-          blocks.push({
-            type: 'divider',
-          });
-        }
-      });
-    }
-  
-    if (interview.dishonests && interview.dishonests.length > 0) {
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: safeText(`*⚠️ Cheating Events (${interview.dishonests.length} entries):*`),
-        },
-      });
-  
-      interview.dishonests.forEach((d, i) => {
-        blocks.push({
-          type: 'context',
-          elements: [
-            {
-              type: 'mrkdwn',
-              text: safeText(`*Q${i + 1}:* ${d.questionId || 'N/A'}  •  *Switch count:* ${d.switchCount || 0}`),
-            },
-          ],
-        });
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: safeText(`📹 *Camera:* \`${cameraRecording}\``) },
+              { type: 'mrkdwn', text: safeText(`🖥️ *Screen:* \`${screenRecording}\``) },
+            ],
+          },
+        ]);
       });
     }
 
-    return blocks;
+    const suffixBlocks: any[] = [];
+    if (interview.dishonests?.length) {
+      const lines = interview.dishonests.map(
+        (d, i) =>
+          `• *#${i + 1}* \`${safeText(d.questionId || 'N/A', 80)}\` — *switches:* ${d.switchCount || 0}`,
+      );
+      const body = safeText(lines.join('\n'), 2800);
+      suffixBlocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: safeText(`*⚠️ Cheating events (${interview.dishonests.length})*\n${body}`),
+        },
+      });
+    }
+
+    return this.packInterviewSlackChunks(preamble, evaluationPairs, suffixBlocks);
+  }
+
+  private packInterviewSlackChunks(
+    preamble: any[],
+    evaluationPairs: any[][],
+    suffixBlocks: any[],
+    maxBlocks = 50,
+  ): any[][] {
+    const messages: any[][] = [];
+    let current: any[] = [...preamble];
+
+    const continuedEvaluations = (): any => ({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '_Interview recording details (continued…)_',
+      },
+    });
+
+    const continuedOther = (): any => ({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '_Additional details (continued…)_',
+      },
+    });
+
+    for (const pair of evaluationPairs) {
+      if (current.length + pair.length > maxBlocks) {
+        if (current.length > 0) {
+          messages.push(current);
+        }
+        current = [continuedEvaluations(), ...pair];
+      } else {
+        current.push(...pair);
+      }
+    }
+
+    for (const block of suffixBlocks) {
+      if (current.length + 1 > maxBlocks) {
+        messages.push(current);
+        current = [continuedOther(), block];
+      } else {
+        current.push(block);
+      }
+    }
+
+    if (current.length > 0) {
+      messages.push(current);
+    }
+
+    return messages;
   }
 
   private getCompletionReasonDisplay(reason?: string): string {
