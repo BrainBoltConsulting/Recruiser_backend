@@ -1,6 +1,7 @@
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { CognitoJwtVerifier } from '../shared/services/cognito-jwt-verifier.service';
+import { UtilsProvider } from '../providers/utils.provider';
 
 @Injectable()
 export class CognitoAuthGuard implements CanActivate {
@@ -38,6 +39,19 @@ export class CognitoAuthGuard implements CanActivate {
       this.logger.error(`Cognito token verification failed: ${error.message}`);
       throw new UnauthorizedException('Invalid or expired token');
     }
+  }
+}
+
+@Injectable()
+export class CognitoAuthUnlessProductionGuard implements CanActivate {
+  constructor(private readonly cognitoAuthGuard: CognitoAuthGuard) {}
+
+  canActivate(context: ExecutionContext): Promise<boolean> {
+    if (!UtilsProvider.isProduction()) {
+      return Promise.resolve(true);
+    }
+
+    return this.cognitoAuthGuard.canActivate(context);
   }
 }
 

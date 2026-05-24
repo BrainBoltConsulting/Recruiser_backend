@@ -2107,18 +2107,51 @@ export class MeetingService {
       scheduleEntity.scheduleId,
       updatedScheduleEntity,
     );
+
+    let scheduledDatetime: Date;
+
+    if (inviteToInterviewDto) {
+      scheduledDatetime = new Date(inviteToInterviewDto.scheduledDate);
+    } else if (scheduleEntity.scheduledDatetime) {
+      scheduledDatetime = new Date(scheduleEntity.scheduledDatetime);
+    } else {
+      scheduledDatetime = new Date();
+    }
+
+    const manager = scheduleEntity.job.manager;
+    const candidate = scheduleEntity.candidate;
+    const candidateName = [candidate.firstName, candidate.lastName]
+      .filter(Boolean)
+      .join(' ');
+
     await this.mailService.send({
-      to: scheduleEntity.candidate.email,
+      to: candidate.email,
       subject: `${
-        scheduleEntity.job.manager.company || 'Hire2o'
+        manager.company || 'Hire2o'
       } Invites You For An AI Interview `,
-      bcc: [scheduleEntity.job.manager.managerEmail],
+      bcc: [manager.managerEmail],
       html: this.mailService.sendInvitationForAMeeting(
-        scheduleEntity.candidate.firstName,
-        scheduleEntity.job.manager,
+        candidate.firstName,
+        manager,
         jobTitle,
         newMeetingLink,
+        scheduledDatetime,
       ),
+      attachments: [
+        {
+          filename: 'interview-invite.ics',
+          content: this.mailService.generateInterviewCalendarInvite({
+            scheduleId: String(scheduleEntity.scheduleId),
+            scheduledDatetime,
+            candidateEmail: candidate.email,
+            candidateName,
+            manager,
+            jobTitle,
+            meetingLink: newMeetingLink,
+          }),
+          contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+        },
+      ],
     });
   }
 
