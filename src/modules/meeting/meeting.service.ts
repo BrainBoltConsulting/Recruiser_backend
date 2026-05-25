@@ -2174,22 +2174,40 @@ export class MeetingService {
       updatedScheduleEntity,
     );
 
+    const refreshedSchedule = await this.scheduleRepository.findById(
+      scheduleId,
+    );
+
     let scheduledDatetime: Date;
 
     if (inviteToInterviewDto) {
       scheduledDatetime = new Date(inviteToInterviewDto.scheduledDate);
-    } else if (scheduleEntity.scheduledDatetime) {
-      scheduledDatetime = new Date(scheduleEntity.scheduledDatetime);
+    } else if (refreshedSchedule.scheduledDatetime) {
+      scheduledDatetime = new Date(refreshedSchedule.scheduledDatetime);
     } else {
       scheduledDatetime = new Date();
     }
 
-    const manager = scheduleEntity.job.manager;
-    const candidate = scheduleEntity.candidate;
+    const manager = refreshedSchedule.job?.manager;
+
+    if (!manager) {
+      throw new BadRequestException(
+        'Job manager not found for this schedule',
+      );
+    }
+
+    const candidate = refreshedSchedule.candidate;
+
+    if (!candidate?.email) {
+      throw new BadRequestException(
+        'Candidate email is required to send an interview invitation',
+      );
+    }
+
     const candidateName = [candidate.firstName, candidate.lastName]
       .filter(Boolean)
       .join(' ');
-    const includeCalendar = this.isFixedWindowSchedule(scheduleEntity);
+    const includeCalendar = this.isFixedWindowSchedule(refreshedSchedule);
 
     const mailPayload: Parameters<MailService['send']>[0] = {
       to: candidate.email,
@@ -2205,14 +2223,14 @@ export class MeetingService {
         scheduledDatetime,
         {
           includeCalendar,
-          candidateTimezone: scheduleEntity.candidateTimezone,
+          candidateTimezone: refreshedSchedule.candidateTimezone,
           fixedWindowHours: FIXED_INTERVIEW_WINDOW_HOURS,
         },
       ),
     };
 
     if (includeCalendar) {
-      if (!scheduleEntity.candidateTimezone) {
+      if (!refreshedSchedule.candidateTimezone) {
         throw new BadRequestException(
           'candidateTimezone is required for fixed-window schedules',
         );
@@ -2222,14 +2240,14 @@ export class MeetingService {
         {
           filename: 'interview-invite.ics',
           content: this.mailService.generateInterviewCalendarInvite({
-            scheduleId: String(scheduleEntity.scheduleId),
+            scheduleId: String(refreshedSchedule.scheduleId),
             scheduledDatetime,
             candidateEmail: candidate.email,
             candidateName,
             manager,
             jobTitle,
             meetingLink: newMeetingLink,
-            candidateTimezone: scheduleEntity.candidateTimezone,
+            candidateTimezone: refreshedSchedule.candidateTimezone,
             calendarWindowHours: FIXED_INTERVIEW_WINDOW_HOURS,
           }),
           contentType: 'text/calendar; charset=utf-8; method=REQUEST',

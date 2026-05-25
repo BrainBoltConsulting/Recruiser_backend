@@ -85,7 +85,7 @@ export class MailService {
       url: meetingLink,
       organizer: {
         name: company,
-        email: manager.managerEmail,
+        email: manager.managerEmail || this.configService.defoultMailFrom,
       },
       attendees: [
         {
