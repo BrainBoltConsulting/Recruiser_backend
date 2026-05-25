@@ -175,20 +175,10 @@ export class MeetingService {
       `Fetched Job: ${jobEntity.jobTitle ?? ''} (jUuid=${jobEntity.jUuid}, jobId=${jobEntity.jobId})`,
     );
 
-    const findScheduleEntityWithTheSameCandidateAndJob =
+    const existingSchedule =
       await this.scheduleRepository.findByCUuidAndJUuid(cUuid, jUuid);
 
-    if (findScheduleEntityWithTheSameCandidateAndJob) {
-      this.logger.warn(
-        `Attempt to schedule duplicate interview for cUuid=${cUuid}, jUuid=${jUuid}`,
-      );
-
-      throw new BadRequestException(
-        'By candidate id and job id meeting already exists',
-      );
-    }
-
-    const newSchedule = this.scheduleRepository.create({
+    const scheduleUpdate: Partial<Schedule> = {
       scheduledDatetime: useFixedWindow
         ? new Date(scheduleInterviewDto.scheduledDate)
         : new Date(),
@@ -198,6 +188,45 @@ export class MeetingService {
       schedulingMode: useFixedWindow
         ? ScheduleSchedulingMode.FIXED_WINDOW
         : ScheduleSchedulingMode.FLEXIBLE,
+      updatedAt: new Date(),
+    };
+
+    if (existingSchedule) {
+      if (existingSchedule.attendedDatetime) {
+        throw new BadRequestException(
+          'Interview has already happened, can not reschedule',
+        );
+      }
+
+      const scheduleId = String(existingSchedule.scheduleId);
+
+      await this.scheduleRepository.update(
+        existingSchedule.scheduleId,
+        scheduleUpdate,
+      );
+
+      this.logger.log(
+        `Rescheduling existing interview | scheduleId=${scheduleId}, cUuid=${cUuid}, jUuid=${jUuid}`,
+      );
+
+      await this.sendInvitionToCandidate(
+        scheduleId,
+        useFixedWindow
+          ? {
+              scheduledDate: new Date(scheduleInterviewDto.scheduledDate),
+            }
+          : undefined,
+      );
+
+      this.logger.log(
+        `Reschedule invitation sent to candidate ${candidateEntity.firstName} ${candidateEntity.lastName}`,
+      );
+
+      return this.scheduleRepository.findById(scheduleId);
+    }
+
+    const newSchedule = this.scheduleRepository.create({
+      ...scheduleUpdate,
       candidate: candidateEntity,
       candidateId: candidateEntity.candidateId,
       cUuid: candidateEntity.cUuid,
@@ -213,7 +242,14 @@ export class MeetingService {
     );
 
     const newScheduleId = String(scheduleEntity.scheduleId);
-    await this.sendInvitionToCandidate(newScheduleId);
+    await this.sendInvitionToCandidate(
+      newScheduleId,
+      useFixedWindow
+        ? {
+            scheduledDate: new Date(scheduleInterviewDto.scheduledDate),
+          }
+        : undefined,
+    );
 
     this.logger.log(
       `Invitation sent to candidate ${scheduleEntity.candidate.firstName} ${scheduleEntity.candidate.lastName}`,
