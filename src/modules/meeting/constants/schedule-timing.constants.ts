@@ -1,0 +1,1 @@
+export const FIXED_INTERVIEW_WINDOW_HOURS = 1;

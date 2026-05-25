@@ -19,6 +19,14 @@ export interface InterviewCalendarInviteParams {
   manager: Manager;
   jobTitle: string;
   meetingLink: string;
+  candidateTimezone: string;
+  calendarWindowHours: number;
+}
+
+export interface MeetingInvitationEmailOptions {
+  includeCalendar: boolean;
+  candidateTimezone?: string | null;
+  fixedWindowHours?: number;
 }
 
 @Injectable()
@@ -50,21 +58,27 @@ export class MailService {
       manager,
       jobTitle,
       meetingLink,
+      candidateTimezone,
+      calendarWindowHours,
     } = params;
     const company = manager.company || 'Hire2o';
     const summary = `${jobTitle} Interview - ${company}`;
     const start = new Date(scheduledDatetime);
     const end = new Date(
-      start.getTime() + INTERVIEW_DURATION_MINUTES * 60 * 1000,
+      start.getTime() + calendarWindowHours * 60 * 60 * 1000,
     );
-    const description = `Join your AI interview: ${meetingLink}\n\nPlease ensure your camera and microphone are ready before the scheduled time.`;
+    const description = `Join your AI interview: ${meetingLink}\n\nYour interview link is valid for ${calendarWindowHours} hour(s) starting at the scheduled time. Please ensure your camera and microphone are ready.`;
 
-    const calendar = ical({ name: `${company} Interview Invite` });
+    const calendar = ical({
+      name: `${company} Interview Invite`,
+      timezone: candidateTimezone,
+    });
 
     calendar.createEvent({
       id: `interview-${scheduleId}@hire2o.ai`,
       start,
       end,
+      timezone: candidateTimezone,
       summary,
       description,
       location: meetingLink,
@@ -91,7 +105,10 @@ export class MailService {
     return calendar.toString();
   }
 
-  private formatScheduledDatetimeForEmail(date: Date): string {
+  private formatScheduledDatetimeForEmail(
+    date: Date,
+    timezone?: string | null,
+  ): string {
     return date.toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -99,6 +116,7 @@ export class MailService {
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
+      timeZone: timezone || undefined,
       timeZoneName: 'short',
     });
   }
@@ -151,13 +169,47 @@ export class MailService {
     primarySkill: string,
     meetingLink: string,
     scheduledDatetime: Date,
+    options: MeetingInvitationEmailOptions = { includeCalendar: false },
   ) {
     const company = manager.company || 'Hire2o';
+    const includeCalendar = options.includeCalendar;
+    const fixedWindowHours = options.fixedWindowHours ?? 1;
     const calendarSummary = `${primarySkill} Interview - ${company}`;
     const calendarEnd = new Date(
-      scheduledDatetime.getTime() + INTERVIEW_DURATION_MINUTES * 60 * 1000,
+      scheduledDatetime.getTime() + fixedWindowHours * 60 * 60 * 1000,
     );
     const calendarDetails = `Join your AI interview: ${meetingLink}`;
+    const scheduledTimeBlock = includeCalendar
+      ? `
+                <p><strong>Scheduled Time:</strong> ${this.formatScheduledDatetimeForEmail(
+                  scheduledDatetime,
+                  options.candidateTimezone,
+                )}</p>
+                <p><strong>Interview window:</strong> ${fixedWindowHours} hour(s) from the scheduled start time</p>
+                <p><strong>Duration:</strong> About ${INTERVIEW_DURATION_MINUTES} minutes</p>
+                <p>
+                    <strong>Add to your calendar:</strong>
+                    <a href="${this.buildGoogleCalendarLink(
+                      calendarSummary,
+                      scheduledDatetime,
+                      calendarEnd,
+                      calendarDetails,
+                      meetingLink,
+                    )}">Google Calendar</a>
+                    |
+                    <a href="${this.buildOutlookCalendarLink(
+                      calendarSummary,
+                      scheduledDatetime,
+                      calendarEnd,
+                      calendarDetails,
+                      meetingLink,
+                    )}">Outlook</a>
+                    |
+                    Open the attached <strong>interview-invite.ics</strong> file
+                </p>
+    `
+      : '';
+
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -255,31 +307,7 @@ export class MailService {
                 </p>
   
                 <p><strong>Meeting Title:</strong> ${primarySkill} Interview</p>
-                <p><strong>Scheduled Time:</strong> ${this.formatScheduledDatetimeForEmail(
-                  scheduledDatetime,
-                )}</p>
-                <p><strong>Duration:</strong> About ${INTERVIEW_DURATION_MINUTES} minutes</p>
-                <p>
-                    <strong>Add to your calendar:</strong>
-                    <a href="${this.buildGoogleCalendarLink(
-                      calendarSummary,
-                      scheduledDatetime,
-                      calendarEnd,
-                      calendarDetails,
-                      meetingLink,
-                    )}">Google Calendar</a>
-                    |
-                    <a href="${this.buildOutlookCalendarLink(
-                      calendarSummary,
-                      scheduledDatetime,
-                      calendarEnd,
-                      calendarDetails,
-                      meetingLink,
-                    )}">Outlook</a>
-                    |
-                    Open the attached <strong>interview-invite.ics</strong> file
-                </p>
-  
+                ${scheduledTimeBlock}
                 <h3>Read carefully before taking your interview:</h3>
                 <p><strong>Duration</strong></p>
                 <ul>

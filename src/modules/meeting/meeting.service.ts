@@ -57,6 +57,8 @@ import {
   ScheduleStatusEnum,
 } from './dtos/schedule-status-response.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
+import { FIXED_INTERVIEW_WINDOW_HOURS } from './constants/schedule-timing.constants';
+import { ScheduleSchedulingMode } from './enums/schedule-scheduling-mode.enum';
 
 @Injectable()
 export class MeetingService {
@@ -84,9 +86,82 @@ export class MeetingService {
     private readonly jobShortlistedProfilesRepository: JobShortlistedProfilesRepository,
   ) {}
 
+  private assertValidTimezone(timezone: string): void {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    } catch {
+      throw new BadRequestException(`Invalid timezone: ${timezone}`);
+    }
+  }
+
+  private isFixedWindowSchedule(schedule: Schedule): boolean {
+    return schedule.schedulingMode === ScheduleSchedulingMode.FIXED_WINDOW;
+  }
+
+  private async assertInterviewWithinAllowedWindow(
+    scheduleEntity: Schedule,
+  ): Promise<void> {
+    if (!scheduleEntity.scheduledDatetime) {
+      throw new BadRequestException('Scheduled datetime is not set');
+    }
+
+    const now = new Date();
+    const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
+
+    if (this.isFixedWindowSchedule(scheduleEntity)) {
+      const windowEnd = new Date(
+        scheduledDate.getTime() +
+          FIXED_INTERVIEW_WINDOW_HOURS * 60 * 60 * 1000,
+      );
+
+      if (now < scheduledDate) {
+        throw new BadRequestException(
+          'Interview is not yet available. Please join at the scheduled time.',
+        );
+      }
+
+      if (now > windowEnd) {
+        throw new BadRequestException(
+          `Interview window has expired. The link was valid for ${FIXED_INTERVIEW_WINDOW_HOURS} hour(s) after the scheduled time.`,
+        );
+      }
+
+      return;
+    }
+
+    const meetingLinkExpiryConfig =
+      await this.configRepository.getMeetingLinkExpiryValue();
+
+    if (!meetingLinkExpiryConfig) {
+      throw new BadRequestException('Meeting link expiry config is not found');
+    }
+
+    const hoursDifference =
+      (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
+
+    if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
+      throw new BadRequestException(
+        `Scheduled time has already passed by more than ${Number(
+          meetingLinkExpiryConfig.configValue,
+        )} hours`,
+      );
+    }
+  }
+
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
     const cUuid = String(scheduleInterviewDto.cUuid);
     const jUuid = String(scheduleInterviewDto.jUuid);
+    const useFixedWindow = Boolean(scheduleInterviewDto.scheduledDate);
+
+    if (useFixedWindow) {
+      if (!scheduleInterviewDto.candidateTimezone) {
+        throw new BadRequestException(
+          'candidateTimezone is required when scheduledDate is provided',
+        );
+      }
+
+      this.assertValidTimezone(scheduleInterviewDto.candidateTimezone);
+    }
 
     this.logger.log(`Scheduling interview for cUuid=${cUuid}, jUuid=${jUuid}`);
 
@@ -114,7 +189,15 @@ export class MeetingService {
     }
 
     const newSchedule = this.scheduleRepository.create({
-      scheduledDatetime: new Date(),
+      scheduledDatetime: useFixedWindow
+        ? new Date(scheduleInterviewDto.scheduledDate)
+        : new Date(),
+      candidateTimezone: useFixedWindow
+        ? scheduleInterviewDto.candidateTimezone
+        : null,
+      schedulingMode: useFixedWindow
+        ? ScheduleSchedulingMode.FIXED_WINDOW
+        : ScheduleSchedulingMode.FLEXIBLE,
       candidate: candidateEntity,
       candidateId: candidateEntity.candidateId,
       cUuid: candidateEntity.cUuid,
@@ -216,77 +299,24 @@ export class MeetingService {
     }
 
     const now = new Date();
-    const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
 
-    this.enhancedLogger.startTimer('db-fetch-expiry-config');
-    const meetingLinkExpiryConfig =
-      await this.configRepository.getMeetingLinkExpiryValue();
-    this.enhancedLogger.endTimer(
-      'db-fetch-expiry-config',
-      LogCategory.DATABASE,
-      'Meeting expiry configuration retrieved',
-      {
-        scheduleId,
-        metadata: {
-          expiryHours: meetingLinkExpiryConfig?.configValue,
-        },
-      },
-    );
-
-    if (!meetingLinkExpiryConfig) {
-      this.enhancedLogger.error(
-        LogCategory.SYSTEM,
-        '⚙️ Meeting link expiry configuration not found',
-        { scheduleId },
-        'MeetingService',
-      );
-
-      throw new BadRequestException('Meeting link expiry config is not found');
-    }
-
-    const hoursDifference =
-      (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
-
-    this.enhancedLogger.info(
-      LogCategory.INTERVIEW,
-      '⏰ Validating interview timing',
-      {
-        scheduleId,
-        metadata: {
-          currentTime: now.toISOString(),
-          scheduledTime: scheduledDate.toISOString(),
-          hoursDifference: hoursDifference.toFixed(2),
-          maxAllowedHours: Number(meetingLinkExpiryConfig.configValue),
-          isWithinTimeLimit:
-            hoursDifference <= Number(meetingLinkExpiryConfig.configValue),
-        },
-      },
-      'MeetingService',
-    );
-
-    if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
+    try {
+      await this.assertInterviewWithinAllowedWindow(scheduleEntity);
+    } catch (error) {
       this.enhancedLogger.error(
         LogCategory.INTERVIEW,
         '⏰ Interview attempt outside allowed time window',
         {
           scheduleId,
           metadata: {
-            hoursDifference: hoursDifference.toFixed(2),
-            maxAllowedHours: Number(meetingLinkExpiryConfig.configValue),
-            hoursOverdue: (
-              hoursDifference - Number(meetingLinkExpiryConfig.configValue)
-            ).toFixed(2),
+            schedulingMode: scheduleEntity.schedulingMode,
             reason: 'time_window_expired',
           },
         },
         'MeetingService',
       );
 
-      throw new BadRequestException(
-        `Scheduled time has already passed by more than ${Number(
-          meetingLinkExpiryConfig.configValue,
-        )} hours`,
-      );
+      throw error;
     }
 
     this.enhancedLogger.startTimer(
@@ -2123,8 +2153,9 @@ export class MeetingService {
     const candidateName = [candidate.firstName, candidate.lastName]
       .filter(Boolean)
       .join(' ');
+    const includeCalendar = this.isFixedWindowSchedule(scheduleEntity);
 
-    await this.mailService.send({
+    const mailPayload: Parameters<MailService['send']>[0] = {
       to: candidate.email,
       subject: `${
         manager.company || 'Hire2o'
@@ -2136,8 +2167,22 @@ export class MeetingService {
         jobTitle,
         newMeetingLink,
         scheduledDatetime,
+        {
+          includeCalendar,
+          candidateTimezone: scheduleEntity.candidateTimezone,
+          fixedWindowHours: FIXED_INTERVIEW_WINDOW_HOURS,
+        },
       ),
-      attachments: [
+    };
+
+    if (includeCalendar) {
+      if (!scheduleEntity.candidateTimezone) {
+        throw new BadRequestException(
+          'candidateTimezone is required for fixed-window schedules',
+        );
+      }
+
+      mailPayload.attachments = [
         {
           filename: 'interview-invite.ics',
           content: this.mailService.generateInterviewCalendarInvite({
@@ -2148,11 +2193,15 @@ export class MeetingService {
             manager,
             jobTitle,
             meetingLink: newMeetingLink,
+            candidateTimezone: scheduleEntity.candidateTimezone,
+            calendarWindowHours: FIXED_INTERVIEW_WINDOW_HOURS,
           }),
           contentType: 'text/calendar; charset=utf-8; method=REQUEST',
         },
-      ],
-    });
+      ];
+    }
+
+    await this.mailService.send(mailPayload);
   }
 
   async getMeetingByMeetingLink(meetingPostfix: string) {
@@ -2167,25 +2216,7 @@ export class MeetingService {
       );
     }
 
-    const now = new Date();
-    const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
-    const meetingLinkExpiryConfig =
-      await this.configRepository.getMeetingLinkExpiryValue();
-
-    if (!meetingLinkExpiryConfig) {
-      throw new BadRequestException('Meeting link expiry config is not found');
-    }
-
-    const hoursDifference =
-      (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
-
-    if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
-      throw new BadRequestException(
-        `Scheduled time has already passed by more than ${Number(
-          meetingLinkExpiryConfig.configValue,
-        )} hours`,
-      );
-    }
+    await this.assertInterviewWithinAllowedWindow(scheduleEntity);
 
     return scheduleEntity;
   }
@@ -2333,6 +2364,8 @@ export class MeetingService {
       scheduleId: schedule.scheduleId,
       status,
       scheduledDatetime: schedule.scheduledDatetime,
+      candidateTimezone: schedule.candidateTimezone,
+      schedulingMode: schedule.schedulingMode,
       meetingLink: schedule.meetingLink,
       attendedDatetime: schedule.attendedDatetime,
       createdOn: schedule.createdOn,
