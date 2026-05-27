@@ -1,0 +1,5 @@
+export enum MeetingLinkAccessCodeEnum {
+  ALREADY_ATTENDED = 'ALREADY_ATTENDED',
+  NOT_STARTED = 'NOT_STARTED',
+  EXPIRED = 'EXPIRED',
+}

@@ -58,7 +58,28 @@ import {
 } from './dtos/schedule-status-response.dto';
 import { StartInterviewDto } from './dtos/start-interview.dto';
 import { FIXED_INTERVIEW_WINDOW_HOURS } from './constants/schedule-timing.constants';
+import { MeetingLinkAccessCodeEnum } from './enums/meeting-link-access-code.enum';
 import { ScheduleSchedulingMode } from './enums/schedule-scheduling-mode.enum';
+
+interface MeetingLinkAccessAllowed {
+  status: 'ALLOWED';
+}
+
+type MeetingLinkAccessDenied =
+  | { status: MeetingLinkAccessCodeEnum.ALREADY_ATTENDED }
+  | {
+      status: MeetingLinkAccessCodeEnum.NOT_STARTED;
+      scheduledDatetime: Date;
+      candidateTimezone: string | null;
+    }
+  | {
+      status: MeetingLinkAccessCodeEnum.EXPIRED;
+      schedulingMode: string;
+    };
+
+type MeetingLinkAccessResult =
+  | MeetingLinkAccessAllowed
+  | MeetingLinkAccessDenied;
 
 @Injectable()
 export class MeetingService {
@@ -98,9 +119,13 @@ export class MeetingService {
     return schedule.schedulingMode === ScheduleSchedulingMode.FIXED_WINDOW;
   }
 
-  private async assertInterviewWithinAllowedWindow(
+  private async resolveMeetingLinkAccess(
     scheduleEntity: Schedule,
-  ): Promise<void> {
+  ): Promise<MeetingLinkAccessResult> {
+    if (scheduleEntity.attendedDatetime) {
+      return { status: MeetingLinkAccessCodeEnum.ALREADY_ATTENDED };
+    }
+
     if (!scheduleEntity.scheduledDatetime) {
       throw new BadRequestException('Scheduled datetime is not set');
     }
@@ -109,24 +134,27 @@ export class MeetingService {
     const scheduledDate = new Date(scheduleEntity.scheduledDatetime);
 
     if (this.isFixedWindowSchedule(scheduleEntity)) {
+      if (now < scheduledDate) {
+        return {
+          status: MeetingLinkAccessCodeEnum.NOT_STARTED,
+          scheduledDatetime: scheduleEntity.scheduledDatetime,
+          candidateTimezone: scheduleEntity.candidateTimezone ?? null,
+        };
+      }
+
       const windowEnd = new Date(
         scheduledDate.getTime() +
           FIXED_INTERVIEW_WINDOW_HOURS * 60 * 60 * 1000,
       );
 
-      if (now < scheduledDate) {
-        throw new BadRequestException(
-          'Interview is not yet available. Please join at the scheduled time.',
-        );
-      }
-
       if (now > windowEnd) {
-        throw new BadRequestException(
-          `Interview window has expired. The link was valid for ${FIXED_INTERVIEW_WINDOW_HOURS} hour(s) after the scheduled time.`,
-        );
+        return {
+          status: MeetingLinkAccessCodeEnum.EXPIRED,
+          schedulingMode: scheduleEntity.schedulingMode,
+        };
       }
 
-      return;
+      return { status: 'ALLOWED' };
     }
 
     const meetingLinkExpiryConfig =
@@ -140,12 +168,35 @@ export class MeetingService {
       (now.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60);
 
     if (hoursDifference > Number(meetingLinkExpiryConfig.configValue)) {
-      throw new BadRequestException(
-        `Scheduled time has already passed by more than ${Number(
-          meetingLinkExpiryConfig.configValue,
-        )} hours`,
-      );
+      return {
+        status: MeetingLinkAccessCodeEnum.EXPIRED,
+        schedulingMode: scheduleEntity.schedulingMode,
+      };
     }
+
+    return { status: 'ALLOWED' };
+  }
+
+  private throwIfMeetingLinkAccessDenied(
+    access: MeetingLinkAccessResult,
+  ): void {
+    if (access.status === 'ALLOWED') {
+      return;
+    }
+
+    const { status, ...details } = access;
+
+    throw new BadRequestException({
+      code: status,
+      ...details,
+    });
+  }
+
+  private async assertInterviewWithinAllowedWindow(
+    scheduleEntity: Schedule,
+  ): Promise<void> {
+    const access = await this.resolveMeetingLinkAccess(scheduleEntity);
+    this.throwIfMeetingLinkAccessDenied(access);
   }
 
   async scheduleInterview(scheduleInterviewDto: ScheduleInterviewDto) {
