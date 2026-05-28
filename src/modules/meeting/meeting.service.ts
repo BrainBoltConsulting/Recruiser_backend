@@ -119,6 +119,33 @@ export class MeetingService {
     return schedule.schedulingMode === ScheduleSchedulingMode.FIXED_WINDOW;
   }
 
+  private async computeMeetingLinkExpiry(
+    schedulingMode: string,
+    scheduledDatetime: Date,
+  ): Promise<Date> {
+    const scheduledDate = new Date(scheduledDatetime);
+
+    if (schedulingMode === ScheduleSchedulingMode.FIXED_WINDOW) {
+      return new Date(
+        scheduledDate.getTime() +
+          FIXED_INTERVIEW_WINDOW_HOURS * 60 * 60 * 1000,
+      );
+    }
+
+    const meetingLinkExpiryConfig =
+      await this.configRepository.getMeetingLinkExpiryValue();
+
+    if (!meetingLinkExpiryConfig?.configValue) {
+      throw new BadRequestException('Meeting link expiry config is not found');
+    }
+
+    const expiryHours = Number(meetingLinkExpiryConfig.configValue);
+
+    return new Date(
+      scheduledDate.getTime() + expiryHours * 60 * 60 * 1000,
+    );
+  }
+
   private async resolveMeetingLinkAccess(
     scheduleEntity: Schedule,
   ): Promise<MeetingLinkAccessResult> {
@@ -141,7 +168,20 @@ export class MeetingService {
           candidateTimezone: scheduleEntity.candidateTimezone ?? null,
         };
       }
+    }
 
+    if (scheduleEntity.meetingLinkExpiry) {
+      if (now > new Date(scheduleEntity.meetingLinkExpiry)) {
+        return {
+          status: MeetingLinkAccessCodeEnum.EXPIRED,
+          schedulingMode: scheduleEntity.schedulingMode,
+        };
+      }
+
+      return { status: 'ALLOWED' };
+    }
+
+    if (this.isFixedWindowSchedule(scheduleEntity)) {
       const windowEnd = new Date(
         scheduledDate.getTime() +
           FIXED_INTERVIEW_WINDOW_HOURS * 60 * 60 * 1000,
@@ -229,16 +269,24 @@ export class MeetingService {
     const existingSchedule =
       await this.scheduleRepository.findByCUuidAndJUuid(cUuid, jUuid);
 
+    const schedulingMode = useFixedWindow
+      ? ScheduleSchedulingMode.FIXED_WINDOW
+      : ScheduleSchedulingMode.FLEXIBLE;
+    const scheduledDatetime = useFixedWindow
+      ? new Date(scheduleInterviewDto.scheduledDate)
+      : new Date();
+    const meetingLinkExpiry = await this.computeMeetingLinkExpiry(
+      schedulingMode,
+      scheduledDatetime,
+    );
+
     const scheduleUpdate: Partial<Schedule> = {
-      scheduledDatetime: useFixedWindow
-        ? new Date(scheduleInterviewDto.scheduledDate)
-        : new Date(),
+      scheduledDatetime,
+      meetingLinkExpiry,
       candidateTimezone: useFixedWindow
         ? scheduleInterviewDto.candidateTimezone
         : null,
-      schedulingMode: useFixedWindow
-        ? ScheduleSchedulingMode.FIXED_WINDOW
-        : ScheduleSchedulingMode.FLEXIBLE,
+      schedulingMode,
       updatedAt: new Date(),
     };
 
@@ -2216,8 +2264,16 @@ export class MeetingService {
     };
 
     if (inviteToInterviewDto) {
-      updatedScheduleEntity.scheduledDatetime =
-        inviteToInterviewDto.scheduledDate;
+      const invitedScheduledDatetime = new Date(
+        inviteToInterviewDto.scheduledDate,
+      );
+
+      updatedScheduleEntity.scheduledDatetime = invitedScheduledDatetime;
+      updatedScheduleEntity.meetingLinkExpiry =
+        await this.computeMeetingLinkExpiry(
+          scheduleEntity.schedulingMode,
+          invitedScheduledDatetime,
+        );
     }
 
     await this.scheduleRepository.update(
@@ -2469,6 +2525,7 @@ export class MeetingService {
       scheduleId: schedule.scheduleId,
       status,
       scheduledDatetime: schedule.scheduledDatetime,
+      meetingLinkExpiry: schedule.meetingLinkExpiry,
       candidateTimezone: schedule.candidateTimezone,
       schedulingMode: schedule.schedulingMode,
       meetingLink: schedule.meetingLink,
