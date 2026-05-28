@@ -125,6 +125,10 @@ export class MeetingService {
   ): Promise<Date> {
     const scheduledDate = new Date(scheduledDatetime);
 
+    if (Number.isNaN(scheduledDate.getTime())) {
+      throw new BadRequestException('Invalid scheduled datetime');
+    }
+
     if (schedulingMode === ScheduleSchedulingMode.FIXED_WINDOW) {
       return new Date(
         scheduledDate.getTime() +
@@ -2263,7 +2267,7 @@ export class MeetingService {
       meetingLink: newMeetingLink,
     };
 
-    if (inviteToInterviewDto) {
+    if (inviteToInterviewDto?.scheduledDate) {
       const invitedScheduledDatetime = new Date(
         inviteToInterviewDto.scheduledDate,
       );
@@ -2287,7 +2291,7 @@ export class MeetingService {
 
     let scheduledDatetime: Date;
 
-    if (inviteToInterviewDto) {
+    if (inviteToInterviewDto?.scheduledDate) {
       scheduledDatetime = new Date(inviteToInterviewDto.scheduledDate);
     } else if (refreshedSchedule.scheduledDatetime) {
       scheduledDatetime = new Date(refreshedSchedule.scheduledDatetime);
