@@ -2,7 +2,8 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import type { ISendMailOptions } from '@nestjs-modules/mailer/dist/interfaces/send-mail-options.interface';
-import ical, { ICalAlarmType } from 'ical-generator';
+import ical, { ICalAlarmType, ICalCalendarMethod } from 'ical-generator';
+import { getVtimezoneComponent } from '@touch4it/ical-timezones';
 
 import type { Manager } from '../../entities/Manager';
 import { ApiConfigService } from './api-config.service';
@@ -71,7 +72,12 @@ export class MailService {
 
     const calendar = ical({
       name: `${company} Interview Invite`,
-      timezone: candidateTimezone,
+    });
+
+    calendar.method(ICalCalendarMethod.REQUEST);
+    calendar.timezone({
+      name: candidateTimezone,
+      generator: getVtimezoneComponent,
     });
 
     calendar.createEvent({
