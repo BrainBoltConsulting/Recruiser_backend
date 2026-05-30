@@ -27,7 +27,7 @@ export class ScheduleInterviewDto {
 
   @ApiPropertyOptional({
     description:
-      'IANA timezone for the candidate (e.g. America/New_York). Required when scheduledDate is provided.',
+      'IANA timezone for the candidate (e.g. America/New_York). Required when scheduledDate is provided. Windows labels like "(UTC-05:00) Eastern Time (US & Canada)" are normalized automatically.',
     example: 'America/New_York',
   })
   @ValidateIf((dto: ScheduleInterviewDto) => Boolean(dto.scheduledDate))

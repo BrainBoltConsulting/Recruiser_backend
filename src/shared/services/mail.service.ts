@@ -3,9 +3,9 @@ import { Injectable } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import type { ISendMailOptions } from '@nestjs-modules/mailer/dist/interfaces/send-mail-options.interface';
 import ical, { ICalAlarmType, ICalCalendarMethod } from 'ical-generator';
-import { getVtimezoneComponent } from '@touch4it/ical-timezones';
 
 import type { Manager } from '../../entities/Manager';
+import { normalizeIanaTimezone } from '../utils/timezone.util';
 import { ApiConfigService } from './api-config.service';
 import { S3Service } from './aws-s3.service';
 
@@ -59,7 +59,6 @@ export class MailService {
       manager,
       jobTitle,
       meetingLink,
-      candidateTimezone,
       calendarWindowHours,
     } = params;
     const company = manager.company || 'Hire2o';
@@ -70,21 +69,20 @@ export class MailService {
     );
     const description = `Join your AI interview: ${meetingLink}\n\nYour interview link is valid for ${calendarWindowHours} hour(s) starting at the scheduled time. Please ensure your camera and microphone are ready.`;
 
+    // Use UTC (…Z) in the ICS file. scheduledDatetime is an absolute instant (ISO UTC).
+    // TZID + local time is unreliable across Outlook / WorkMail and can shift by the
+    // timezone offset (e.g. 9:36 AM Eastern shown as 1:36 PM when UTC hours are
+    // written into a local TZID field). Clients convert UTC to the user's calendar TZ.
     const calendar = ical({
       name: `${company} Interview Invite`,
     });
 
     calendar.method(ICalCalendarMethod.REQUEST);
-    calendar.timezone({
-      name: candidateTimezone,
-      generator: getVtimezoneComponent,
-    });
 
     calendar.createEvent({
       id: `interview-${scheduleId}@hire2o.ai`,
       start,
       end,
-      timezone: candidateTimezone,
       summary,
       description,
       location: meetingLink,
@@ -115,6 +113,8 @@ export class MailService {
     date: Date,
     timezone?: string | null,
   ): string {
+    const timeZone = timezone ? normalizeIanaTimezone(timezone) : undefined;
+
     return date.toLocaleString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -122,7 +122,7 @@ export class MailService {
       day: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
-      timeZone: timezone || undefined,
+      timeZone,
       timeZoneName: 'short',
     });
   }

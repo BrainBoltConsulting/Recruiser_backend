@@ -42,6 +42,7 @@ import { S3Service } from '../../shared/services/aws-s3.service';
 import { CognitoAuthService } from '../../shared/services/cognito-auth.service';
 import { EnhancedLoggerService } from '../../shared/services/enhanced-logger.service';
 import { MailService } from '../../shared/services/mail.service';
+import { normalizeIanaTimezone } from '../../shared/utils/timezone.util';
 import { SlackNotificationService } from '../../shared/services/slack-notification.service';
 import { QuestionService } from '../question/question.service';
 import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
@@ -107,11 +108,13 @@ export class MeetingService {
     private readonly jobShortlistedProfilesRepository: JobShortlistedProfilesRepository,
   ) {}
 
-  private assertValidTimezone(timezone: string): void {
+  private assertValidTimezone(timezone: string): string {
     try {
-      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+      return normalizeIanaTimezone(timezone);
     } catch {
-      throw new BadRequestException(`Invalid timezone: ${timezone}`);
+      throw new BadRequestException(
+        `Invalid timezone: ${timezone}. Use an IANA timezone such as America/New_York.`,
+      );
     }
   }
 
@@ -248,6 +251,8 @@ export class MeetingService {
     const jUuid = String(scheduleInterviewDto.jUuid);
     const useFixedWindow = Boolean(scheduleInterviewDto.scheduledDate);
 
+    let normalizedCandidateTimezone: string | null = null;
+
     if (useFixedWindow) {
       if (!scheduleInterviewDto.candidateTimezone) {
         throw new BadRequestException(
@@ -255,7 +260,9 @@ export class MeetingService {
         );
       }
 
-      this.assertValidTimezone(scheduleInterviewDto.candidateTimezone);
+      normalizedCandidateTimezone = this.assertValidTimezone(
+        scheduleInterviewDto.candidateTimezone,
+      );
     }
 
     this.logger.log(`Scheduling interview for cUuid=${cUuid}, jUuid=${jUuid}`);
@@ -287,9 +294,7 @@ export class MeetingService {
     const scheduleUpdate: Partial<Schedule> = {
       scheduledDatetime,
       meetingLinkExpiry,
-      candidateTimezone: useFixedWindow
-        ? scheduleInterviewDto.candidateTimezone
-        : null,
+      candidateTimezone: normalizedCandidateTimezone,
       schedulingMode,
       updatedAt: new Date(),
     };
