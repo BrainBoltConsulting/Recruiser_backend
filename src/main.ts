@@ -1,3 +1,10 @@
+import { webcrypto } from 'node:crypto';
+
+// ical-generator v10 uses global crypto.randomUUID() (Node 19+). Polyfill for older Node on EC2.
+if (typeof globalThis.crypto === 'undefined') {
+  globalThis.crypto = webcrypto as Crypto;
+}
+
 import {
   HttpStatus,
   UnprocessableEntityException,

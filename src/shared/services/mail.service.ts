@@ -2,10 +2,33 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { MailerService } from '@nestjs-modules/mailer';
 import type { ISendMailOptions } from '@nestjs-modules/mailer/dist/interfaces/send-mail-options.interface';
+import ical, { ICalAlarmType, ICalCalendarMethod } from 'ical-generator';
 
 import type { Manager } from '../../entities/Manager';
+import { normalizeIanaTimezone } from '../utils/timezone.util';
 import { ApiConfigService } from './api-config.service';
 import { S3Service } from './aws-s3.service';
+
+const INTERVIEW_DURATION_MINUTES = 30;
+const CALENDAR_REMINDER_SECONDS = 15 * 60;
+
+export interface InterviewCalendarInviteParams {
+  scheduleId: string;
+  scheduledDatetime: Date;
+  candidateEmail: string;
+  candidateName: string;
+  manager: Manager;
+  jobTitle: string;
+  meetingLink: string;
+  candidateTimezone: string;
+  calendarWindowHours: number;
+}
+
+export interface MeetingInvitationEmailOptions {
+  includeCalendar: boolean;
+  candidateTimezone?: string | null;
+  fixedWindowHours?: number;
+}
 
 @Injectable()
 export class MailService {
@@ -25,12 +48,174 @@ export class MailService {
     await this.mailerService.sendMail(mailData);
   }
 
+  generateInterviewCalendarInvite(
+    params: InterviewCalendarInviteParams,
+  ): string {
+    const {
+      scheduleId,
+      scheduledDatetime,
+      candidateEmail,
+      candidateName,
+      manager,
+      jobTitle,
+      meetingLink,
+      calendarWindowHours,
+    } = params;
+    const company = manager.company || 'Hire2o';
+    const summary = `${jobTitle} Interview - ${company}`;
+    const start = new Date(scheduledDatetime);
+    const end = new Date(
+      start.getTime() + calendarWindowHours * 60 * 60 * 1000,
+    );
+    const description = `Join your AI interview: ${meetingLink}\n\nYour interview link is valid for ${calendarWindowHours} hour(s) starting at the scheduled time. Please ensure your camera and microphone are ready.`;
+
+    // Use UTC (…Z) in the ICS file. scheduledDatetime is an absolute instant (ISO UTC).
+    // TZID + local time is unreliable across Outlook / WorkMail and can shift by the
+    // timezone offset (e.g. 9:36 AM Eastern shown as 1:36 PM when UTC hours are
+    // written into a local TZID field). Clients convert UTC to the user's calendar TZ.
+    const calendar = ical({
+      name: `${company} Interview Invite`,
+    });
+
+    calendar.method(ICalCalendarMethod.REQUEST);
+
+    calendar.createEvent({
+      id: `interview-${scheduleId}@hire2o.ai`,
+      start,
+      end,
+      summary,
+      description,
+      location: meetingLink,
+      url: meetingLink,
+      organizer: {
+        name: company,
+        email: manager.managerEmail || this.configService.defoultMailFrom,
+      },
+      attendees: [
+        {
+          email: candidateEmail,
+          name: candidateName,
+          rsvp: true,
+        },
+      ],
+      alarms: [
+        {
+          type: ICalAlarmType.display,
+          triggerBefore: CALENDAR_REMINDER_SECONDS,
+        },
+      ],
+    });
+
+    return calendar.toString();
+  }
+
+  private formatScheduledDatetimeForEmail(
+    date: Date,
+    timezone?: string | null,
+  ): string {
+    const timeZone = timezone ? normalizeIanaTimezone(timezone) : undefined;
+
+    return date.toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone,
+      timeZoneName: 'short',
+    });
+  }
+
+  private formatGoogleCalendarDate(date: Date): string {
+    return `${date.toISOString().replace(/[-:]/g, '').split('.')[0]}Z`;
+  }
+
+  private buildGoogleCalendarLink(
+    summary: string,
+    start: Date,
+    end: Date,
+    details: string,
+    location: string,
+  ): string {
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: summary,
+      dates: `${this.formatGoogleCalendarDate(start)}/${this.formatGoogleCalendarDate(end)}`,
+      details,
+      location,
+    });
+
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  }
+
+  private buildOutlookCalendarLink(
+    summary: string,
+    start: Date,
+    end: Date,
+    details: string,
+    location: string,
+  ): string {
+    const params = new URLSearchParams({
+      path: '/calendar/action/compose',
+      rru: 'addevent',
+      subject: summary,
+      startdt: start.toISOString(),
+      enddt: end.toISOString(),
+      body: details,
+      location,
+    });
+
+    return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+  }
+
   sendInvitationForAMeeting(
     firstName: string,
     manager: Manager,
     primarySkill: string,
     meetingLink: string,
+    scheduledDatetime: Date,
+    options: MeetingInvitationEmailOptions = { includeCalendar: false },
   ) {
+    const company = manager.company || 'Hire2o';
+    const includeCalendar = options.includeCalendar;
+    const fixedWindowHours = options.fixedWindowHours ?? 1;
+    const calendarSummary = `${primarySkill} Interview - ${company}`;
+    const calendarEnd = new Date(
+      scheduledDatetime.getTime() + fixedWindowHours * 60 * 60 * 1000,
+    );
+    const calendarDetails = `Join your AI interview: ${meetingLink}`;
+    const scheduledTimeBlock = includeCalendar
+      ? `
+                <p><strong>Scheduled Time:</strong> ${this.formatScheduledDatetimeForEmail(
+                  scheduledDatetime,
+                  options.candidateTimezone,
+                )}</p>
+                <p><strong>Interview window:</strong> ${fixedWindowHours} hour(s) from the scheduled start time</p>
+                <p><strong>Duration:</strong> About ${INTERVIEW_DURATION_MINUTES} minutes</p>
+                <p>
+                    <strong>Add to your calendar:</strong>
+                    <a href="${this.buildGoogleCalendarLink(
+                      calendarSummary,
+                      scheduledDatetime,
+                      calendarEnd,
+                      calendarDetails,
+                      meetingLink,
+                    )}">Google Calendar</a>
+                    |
+                    <a href="${this.buildOutlookCalendarLink(
+                      calendarSummary,
+                      scheduledDatetime,
+                      calendarEnd,
+                      calendarDetails,
+                      meetingLink,
+                    )}">Outlook</a>
+                    |
+                    Open the attached <strong>interview-invite.ics</strong> file
+                </p>
+    `
+      : '';
+
     return `
     <!DOCTYPE html>
     <html lang="en">
@@ -128,7 +313,7 @@ export class MailService {
                 </p>
   
                 <p><strong>Meeting Title:</strong> ${primarySkill} Interview</p>
-  
+                ${scheduledTimeBlock}
                 <h3>Read carefully before taking your interview:</h3>
                 <p><strong>Duration</strong></p>
                 <ul>

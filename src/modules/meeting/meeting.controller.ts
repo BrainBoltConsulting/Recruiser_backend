@@ -15,7 +15,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { ApiFile } from '../../decorators/swagger.decorator';
-import { CognitoAuthGuard } from '../../guards/cognito-auth.guard';
+import { CognitoAuthGuard, CognitoAuthUnlessProductionGuard } from '../../guards/cognito-auth.guard';
 import { FileSizeGuard } from '../../guards/file-size.guard';
 import { InviteToInterviewDto } from './dtos/invite-to-interview.dto';
 import { IsInterviewFinishedEarlierDto } from './dtos/is-interview-finished-earlier.dto';
@@ -95,7 +95,7 @@ export class MeetingController {
   }
 
   @Post('/schedule/:scheduleId/invite')
-  @UseGuards(CognitoAuthGuard)
+  @UseGuards(CognitoAuthUnlessProductionGuard)
   @ApiBearerAuth('cognito')
   @HttpCode(HttpStatus.OK)
   async sendInvitationToCandidate(

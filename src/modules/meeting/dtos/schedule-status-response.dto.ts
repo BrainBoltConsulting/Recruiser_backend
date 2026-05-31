@@ -172,6 +172,26 @@ export class ScheduleStatusResponseDto {
   @ApiProperty({ nullable: true })
   scheduledDatetime: Date | null;
 
+  @ApiProperty({
+    nullable: true,
+    description:
+      'When the meeting link expires (scheduledDatetime + 1h fixed_window, or + meeting_link_expiry config for flexible)',
+  })
+  meetingLinkExpiry: Date | null;
+
+  @ApiProperty({
+    nullable: true,
+    description: 'IANA timezone for fixed-window schedules',
+    example: 'America/New_York',
+  })
+  candidateTimezone: string | null;
+
+  @ApiProperty({
+    description: 'flexible = config expiry; fixed_window = 1 hour from scheduled time',
+    example: 'flexible',
+  })
+  schedulingMode: string;
+
   @ApiProperty({ nullable: true })
   meetingLink: string | null;
 

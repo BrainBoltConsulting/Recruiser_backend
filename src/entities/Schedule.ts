@@ -21,6 +21,22 @@ export class Schedule {
   })
   scheduledDatetime: Date | null;
 
+  @Column("timestamp without time zone", {
+    name: "meeting_link_expiry",
+    nullable: true,
+  })
+  meetingLinkExpiry: Date | null;
+
+  @Column("varchar", { name: "candidate_timezone", length: 64, nullable: true })
+  candidateTimezone: string | null;
+
+  @Column("varchar", {
+    name: "scheduling_mode",
+    length: 32,
+    default: () => "'flexible'",
+  })
+  schedulingMode: string;
+
   @Column("text", { name: "meeting_link", nullable: true })
   meetingLink: string | null;
 
